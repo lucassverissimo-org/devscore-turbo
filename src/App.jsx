@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
 
 const colors = [
-  { max: 50, color: 'bg-green-500' },
+  { max: 20, color: 'bg-blue-500' },
   { max: 75, color: 'bg-yellow-400' },
   { max: 99, color: 'bg-orange-400' },
+  { max: 100, color: 'bg-green-500'},
   { max: Infinity, color: 'bg-red-500' },
 ]
 
@@ -162,7 +163,7 @@ export default function App() {
                 ))}
                 <input
                     type="number"
-                    placeholder="custom"
+                    placeholder="Personalizado"
                     className="border p-1 rounded w-36 text-sm"
                     onChange={(e) => {
                       const value = e.target.value
