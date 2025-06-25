@@ -18,7 +18,7 @@ export default function App() {
   const { theme, setTheme } = useTheme()
 
   const [devs, setDevs] = useState([
-    { name: 'Lucas', capacity: 14, points: 0, history: [], customPoints: '' },
+    { name: 'Lucas Veríssimo', capacity: 14, points: 0, history: [], customPoints: '' },
     { name: 'Samuel', capacity: 14, points: 0, history: [], customPoints: '' },
     { name: 'Ivan', capacity: 14, points: 0, history: [], customPoints: '' },
     { name: 'João Victor', capacity: 14, points: 0, history: [], customPoints: '' },
