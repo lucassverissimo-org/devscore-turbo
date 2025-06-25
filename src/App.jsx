@@ -19,10 +19,10 @@ export default function App() {
 
   const [devs, setDevs] = useState([
     { name: 'Lucas Veríssimo', capacity: 14, points: 0, history: [], customPoints: '' },
-    { name: 'Samuel', capacity: 14, points: 0, history: [], customPoints: '' },
-    { name: 'Ivan', capacity: 14, points: 0, history: [], customPoints: '' },
+    { name: 'Samuel Augusto', capacity: 14, points: 0, history: [], customPoints: '' },
+    { name: 'Ivan Trindade', capacity: 14, points: 0, history: [], customPoints: '' },
     { name: 'João Victor', capacity: 14, points: 0, history: [], customPoints: '' },
-    { name: 'Ramon', capacity: 14, points: 0, history: [], customPoints: '' },
+    { name: 'Ramon Rosa', capacity: 14, points: 0, history: [], customPoints: '' },
   ])
   const [newDev, setNewDev] = useState({ name: '', capacity: '' })
   const [customPointsMap, setCustomPointsMap] = useState({})
