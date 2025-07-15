@@ -52,6 +52,7 @@ export default function App() {
         .from('Devs')
         .select('*')
         .eq('idTeam', selectedTeamId)
+        .order("name",{ascending:true})
 
       if (error) {
         console.error('Erro ao buscar devs:', error)
