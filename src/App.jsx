@@ -24,15 +24,6 @@ export default function App() {
   const [teams, setTeams] = useState([])
   const [selectedTeamId, setSelectedTeamId] = useState('')
   const [selectedTeam, setSelectedTeam] = useState('')
-
-  // const [devs, setDevs] = useState([
-  //   { name: 'Lucas Veríssimo', capacity: 14, points: 0, history: [], customPoints: '' },
-  //   { name: 'Samuel Augusto', capacity: 14, points: 0, history: [], customPoints: '' },
-  //   { name: 'Ivan Trindade', capacity: 14, points: 0, history: [], customPoints: '' },
-  //   { name: 'João Victor', capacity: 14, points: 0, history: [], customPoints: '' },
-  //   { name: 'Ramon Rosa', capacity: 14, points: 0, history: [], customPoints: '' },
-  // ])
-
   const [devs, setDevs] = useState([]) 
   const [newDev, setNewDev] = useState({ name: '', capacity: '' })
   const [customPointsMap, setCustomPointsMap] = useState({})
