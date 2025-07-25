@@ -129,7 +129,7 @@ export default function App() {
     if (!selectedTeam) return []
 
     return selectedTeam.pointsType === 'hrs'
-      ? [4, 8, 12, 16, 20, 24, 28, 32, 36, 40]
+      ? [2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 36, 40]
       : [1, 2, 3, 5, 8, 13]
   }
 
@@ -308,6 +308,22 @@ export default function App() {
               </div>
             )
           })}
+          {devs.length > 0 && (
+            <div className="mt-8 p-4 bg-white dark:bg-gray-800 shadow rounded space-y-2">
+              <h2 className="text-lg font-semibold">Resumo</h2>
+              <p><strong>Capacidade geral:</strong> {devs.reduce((sum, d) => sum + d.capacity, 0)}</p>
+              <p><strong>Pontos alocados:</strong> {devs.reduce((sum, d) => sum + d.points, 0)}</p>
+              <p><strong>{selectedTeam?.pointsType || 'Pontos'} disponíveis:</strong> {
+                devs.reduce((sum, d) => sum + d.capacity, 0) - devs.reduce((sum, d) => sum + d.points, 0)
+              }</p>
+              <p><strong>Devs disponíveis:</strong> {
+                devs.filter(d => d.points < d.capacity).map(d => d.name).join(', ') || 'Nenhum'
+              }</p>
+              <p><strong>Devs sobrecarregados:</strong> {
+                devs.filter(d => d.points > d.capacity).map(d => d.name).join(', ') || 'Nenhum'
+              }</p>
+            </div>
+          )}
         </div>
       </div>
       {showSettings && (
