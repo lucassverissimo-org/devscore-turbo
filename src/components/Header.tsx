@@ -12,7 +12,7 @@ interface HeaderProps {
 export default function Header({ theme, setTheme, setShowSettings }: HeaderProps) {
   return (
     <header className="flex items-center justify-between mb-6 p-4 rounded-lg bg-white dark:bg-gray-800 shadow">
-      <h1 className="text-xl font-bold text-green-800 dark:text-green-300">
+      <h1 className="text-xl font-bold text-green-800 dark:text-green-100">
         Distribuição de Pontos
       </h1>
 
