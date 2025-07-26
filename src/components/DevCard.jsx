@@ -1,6 +1,6 @@
 import React from 'react'
-import { getColor } from '../utils/colors'
-import { getPointValues } from '../utils/getPointValues'
+import { getColor } from '../lib/utils/colors'
+import { getPointValues } from '../lib/utils/getPointValues'
 
 export default function DevCard({ dev, index, selectedTeam, updateCapacity, addPoints, customPointsMap, setCustomPointsMap, removeDev, removeHistoryItem }) {
   const percent = Math.floor((dev.points / dev.capacity) * 100)

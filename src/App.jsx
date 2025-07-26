@@ -9,7 +9,7 @@ import AddDevForm from './components/AddDevForm'
 import DevCard from './components/DevCard'
 import Summary from './components/Summary'
 import SettingsModal from './components/SettingsModal'
-import { getPointValues } from './utils/getPointValues'
+import { getPointValues } from './lib/utils/getPointValues'
 
 export default function App() {
   const { theme, setTheme } = useTheme()
