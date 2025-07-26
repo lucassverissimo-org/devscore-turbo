@@ -6,6 +6,6 @@ export const colors = [
   { max: Infinity, color: 'bg-red-500' },
 ]
 
-export function getColor(percent) {
-  return colors.find(c => percent <= c.max).color
+export function getColor(percent: number): string {
+  return colors.find(c => percent <= c.max)!.color
 }

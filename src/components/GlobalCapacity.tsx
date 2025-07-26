@@ -1,6 +1,19 @@
 import React from 'react'
+import { Dev } from '../types'
 
-export default function GlobalCapacity({ globalCapacity, setGlobalCapacity, devs, setDevs }) {
+interface GlobalCapacityProps {
+  globalCapacity: string
+  setGlobalCapacity: React.Dispatch<React.SetStateAction<string>>
+  devs: Dev[]
+  setDevs: React.Dispatch<React.SetStateAction<Dev[]>>
+}
+
+export default function GlobalCapacity({
+  globalCapacity,
+  setGlobalCapacity,
+  devs,
+  setDevs,
+}: GlobalCapacityProps) {
   return (
     <div className="flex flex-col">
       <div className="flex gap-2">

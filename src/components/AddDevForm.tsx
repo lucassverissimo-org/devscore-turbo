@@ -1,7 +1,17 @@
 import React from 'react'
 import { Save } from 'lucide-react'
+type Dev = {
+  name: string
+  capacity: string
+}
 
-export default function AddDevForm({ newDev, setNewDev, addDev }) {
+interface AddDevFormProps {
+  newDev: Dev
+  setNewDev: (dev: Dev) => void
+  addDev: () => void
+}
+
+export default function AddDevForm({ newDev, setNewDev, addDev }: AddDevFormProps) {
   return (
     <div className="flex gap-4">
       <input

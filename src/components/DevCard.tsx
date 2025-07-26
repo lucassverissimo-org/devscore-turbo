@@ -1,8 +1,32 @@
 import React from 'react'
 import { getColor } from '../lib/utils/colors'
 import { getPointValues } from '../lib/utils/getPointValues'
+import { Dev, Team } from '../types'
 
-export default function DevCard({ dev, index, selectedTeam, updateCapacity, addPoints, customPointsMap, setCustomPointsMap, removeDev, removeHistoryItem }) {
+
+interface DevCardProps {
+  dev: Dev
+  index: number
+  selectedTeam: Team
+  updateCapacity: (index: number, value: string) => void
+  addPoints: (index: number, value: number) => void
+  customPointsMap: Record<number, string>
+  setCustomPointsMap: React.Dispatch<React.SetStateAction<Record<number, string>>>
+  removeDev: (index: number) => void
+  removeHistoryItem: (devIndex: number, histIndex: number) => void
+}
+
+export default function DevCard({
+  dev,
+  index,
+  selectedTeam,
+  updateCapacity,
+  addPoints,
+  customPointsMap,
+  setCustomPointsMap,
+  removeDev,
+  removeHistoryItem,
+}: DevCardProps) {
   const percent = Math.floor((dev.points / dev.capacity) * 100)
   const color = getColor(percent)
 
@@ -16,7 +40,9 @@ export default function DevCard({ dev, index, selectedTeam, updateCapacity, addP
       </div>
 
       <div className="flex justify-between items-center mb-2">
-        <span>{dev.points} / {dev.capacity} {selectedTeam.pointsType} </span>
+        <span>
+          {dev.points} / {dev.capacity} {selectedTeam.pointsType}
+        </span>
         <input
           type="number"
           value={dev.capacity}
@@ -43,7 +69,7 @@ export default function DevCard({ dev, index, selectedTeam, updateCapacity, addP
           type="number"
           placeholder="Personalizado"
           className="border p-1 rounded w-36 text-sm bg-white dark:bg-gray-700 dark:border-gray-600"
-          onChange={(e) => {
+          onChange={e => {
             const value = e.target.value
             setCustomPointsMap(prev => ({ ...prev, [index]: value }))
           }}
@@ -68,8 +94,16 @@ export default function DevCard({ dev, index, selectedTeam, updateCapacity, addP
         <ul className="mt-2 text-sm space-y-1">
           {dev.history.map((entry, i) => (
             <li key={i} className="flex justify-between items-center">
-              <span>{entry.value > 0 ? '+' : ''}{entry.value} {selectedTeam.pointsType}</span>
-              <button onClick={() => removeHistoryItem(index, i)} className="text-xs text-red-500 hover:underline">❌</button>
+              <span>
+                {entry.value > 0 ? '+' : ''}
+                {entry.value} {selectedTeam.pointsType}
+              </span>
+              <button
+                onClick={() => removeHistoryItem(index, i)}
+                className="text-xs text-red-500 hover:underline"
+              >
+                ❌
+              </button>
             </li>
           ))}
         </ul>
