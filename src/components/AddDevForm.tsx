@@ -1,5 +1,7 @@
 import React from 'react'
 import { Save } from 'lucide-react'
+import { PointsType } from '../types'
+
 type Dev = {
   name: string
   capacity: string
@@ -9,9 +11,10 @@ interface AddDevFormProps {
   newDev: Dev
   setNewDev: (dev: Dev) => void
   addDev: () => void
+  pointsType: PointsType
 }
 
-export default function AddDevForm({ newDev, setNewDev, addDev }: AddDevFormProps) {
+export default function AddDevForm({ newDev, setNewDev, addDev, pointsType }: AddDevFormProps) {
   return (
     <div className="flex gap-4">
       <input
@@ -22,7 +25,7 @@ export default function AddDevForm({ newDev, setNewDev, addDev }: AddDevFormProp
       />
       <input
         type="number"
-        placeholder="Capacidade"
+        placeholder={`Capacidade (${pointsType})`}
         value={newDev.capacity}
         onChange={e => setNewDev({ ...newDev, capacity: e.target.value })}
         className="border p-2 rounded w-1/2 bg-white dark:bg-gray-800 dark:border-gray-700"

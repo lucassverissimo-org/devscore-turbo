@@ -1,12 +1,12 @@
 import React from 'react'
-import { Dev, Team } from '../types'
+import { Dev, PointsType } from '../types'
 
 interface SummaryProps {
   devs: Dev[]
-  selectedTeam?: Team
+  pointsType: PointsType
 }
 
-export default function Summary({ devs, selectedTeam }: SummaryProps) {
+export default function Summary({ devs, pointsType }: SummaryProps) {
   const totalCap = devs.reduce((sum, d) => sum + d.capacity, 0)
   const totalPoints = devs.reduce((sum, d) => sum + d.points, 0)
 
@@ -14,13 +14,13 @@ export default function Summary({ devs, selectedTeam }: SummaryProps) {
     <div className="mt-8 p-4 bg-white dark:bg-gray-800 shadow rounded space-y-2">
       <h2 className="text-lg font-semibold">Resumo</h2>
       <p><strong>Capacidade geral:</strong> {totalCap}</p>
-      <p><strong>Pontos alocados:</strong> {totalPoints}</p>
+      <p><strong>Total alocado:</strong> {totalPoints} {pointsType}</p>
       <p>
-        <strong>{selectedTeam?.pointsType || 'Pontos'} disponíveis:</strong>{' '}
+        <strong>{pointsType} disponiveis:</strong>{' '}
         {totalCap - totalPoints}
       </p>
       <p>
-        <strong>Devs disponíveis:</strong>{' '}
+        <strong>Devs disponiveis:</strong>{' '}
         {devs.filter(d => d.points < d.capacity).map(d => d.name).join(', ') || 'Nenhum'}
       </p>
       <p>

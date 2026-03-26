@@ -1,13 +1,12 @@
 import React from 'react'
 import { getColor } from '../lib/utils/colors'
 import { getPointValues } from '../lib/utils/getPointValues'
-import { Dev, Team } from '../types'
-
+import { Dev, PointsType } from '../types'
 
 interface DevCardProps {
   dev: Dev
   index: number
-  selectedTeam: Team
+  pointsType: PointsType
   updateCapacity: (index: number, value: string) => void
   addPoints: (index: number, value: number) => void
   customPointsMap: Record<number, string>
@@ -19,7 +18,7 @@ interface DevCardProps {
 export default function DevCard({
   dev,
   index,
-  selectedTeam,
+  pointsType,
   updateCapacity,
   addPoints,
   customPointsMap,
@@ -27,7 +26,7 @@ export default function DevCard({
   removeDev,
   removeHistoryItem,
 }: DevCardProps) {
-  const percent = Math.floor((dev.points / dev.capacity) * 100)
+  const percent = dev.capacity > 0 ? Math.floor((dev.points / dev.capacity) * 100) : 0
   const color = getColor(percent)
 
   return (
@@ -41,7 +40,7 @@ export default function DevCard({
 
       <div className="flex justify-between items-center mb-2">
         <span>
-          {dev.points} / {dev.capacity} {selectedTeam.pointsType}
+          {dev.points} / {dev.capacity} {pointsType}
         </span>
         <input
           type="number"
@@ -56,7 +55,7 @@ export default function DevCard({
       </div>
 
       <div className="flex gap-2 flex-wrap mb-2">
-        {getPointValues(selectedTeam.pointsType).map(val => (
+        {getPointValues(pointsType).map(val => (
           <button
             key={val}
             onClick={() => addPoints(index, val)}
@@ -78,31 +77,31 @@ export default function DevCard({
         <button
           onClick={() => {
             const value = Number(customPointsMap[index])
-            if (!isNaN(value) && value !== 0) {
+            if (!Number.isNaN(value) && value !== 0) {
               addPoints(index, value)
               setCustomPointsMap(prev => ({ ...prev, [index]: '' }))
             }
           }}
           className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded hover:bg-blue-200 dark:hover:bg-blue-800 text-sm"
         >
-          ➕
+          +
         </button>
       </div>
 
       <details>
-        <summary className="cursor-pointer text-sm text-blue-600 dark:text-blue-400">Ver histórico</summary>
+        <summary className="cursor-pointer text-sm text-blue-600 dark:text-blue-400">Ver historico</summary>
         <ul className="mt-2 text-sm space-y-1">
           {dev.history.map((entry, i) => (
             <li key={i} className="flex justify-between items-center">
               <span>
                 {entry.value > 0 ? '+' : ''}
-                {entry.value} {selectedTeam.pointsType}
+                {entry.value} {pointsType}
               </span>
               <button
                 onClick={() => removeHistoryItem(index, i)}
                 className="text-xs text-red-500 hover:underline"
               >
-                ❌
+                Remover
               </button>
             </li>
           ))}
