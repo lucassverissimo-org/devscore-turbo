@@ -73,7 +73,7 @@ export default function DevCard({
         ))}
         <input
           type="text"
-          placeholder="Texto"
+          placeholder="Estória/Tarefa"
           maxLength={HISTORY_TEXT_MAX_LENGTH}
           className="border p-1 rounded w-32 text-sm bg-white dark:bg-gray-700 dark:border-gray-600"
           onChange={e => setHistoryText(e.target.value)}
