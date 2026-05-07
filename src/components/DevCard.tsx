@@ -1,6 +1,7 @@
 import React from 'react'
 import { getColor } from '../lib/utils/colors'
 import { getPointValues } from '../lib/utils/getPointValues'
+import { HISTORY_TEXT_MAX_LENGTH } from '../lib/utils/history'
 import { Dev, PointsType } from '../types'
 
 interface DevCardProps {
@@ -8,7 +9,7 @@ interface DevCardProps {
   index: number
   pointsType: PointsType
   updateCapacity: (index: number, value: string) => void
-  addPoints: (index: number, value: number) => void
+  addPoints: (index: number, value: number, text?: string) => void
   customPointsMap: Record<number, string>
   setCustomPointsMap: React.Dispatch<React.SetStateAction<Record<number, string>>>
   removeDev: (index: number) => void
@@ -28,6 +29,12 @@ export default function DevCard({
 }: DevCardProps) {
   const percent = dev.capacity > 0 ? Math.floor((dev.points / dev.capacity) * 100) : 0
   const color = getColor(percent)
+  const [historyText, setHistoryText] = React.useState('')
+
+  const addPointsWithText = (value: number) => {
+    addPoints(index, value, historyText)
+    setHistoryText('')
+  }
 
   return (
     <div className="p-4 bg-white dark:bg-gray-800 shadow rounded transition-colors">
@@ -58,12 +65,20 @@ export default function DevCard({
         {getPointValues(pointsType).map(val => (
           <button
             key={val}
-            onClick={() => addPoints(index, val)}
+            onClick={() => addPointsWithText(val)}
             className="bg-gray-200 dark:bg-gray-600 px-3 py-1 rounded hover:bg-gray-300 dark:hover:bg-gray-500"
           >
             +{val}
           </button>
         ))}
+        <input
+          type="text"
+          placeholder="Texto"
+          maxLength={HISTORY_TEXT_MAX_LENGTH}
+          className="border p-1 rounded w-32 text-sm bg-white dark:bg-gray-700 dark:border-gray-600"
+          onChange={e => setHistoryText(e.target.value)}
+          value={historyText}
+        />
         <input
           type="number"
           placeholder="Personalizado"
@@ -78,7 +93,7 @@ export default function DevCard({
           onClick={() => {
             const value = Number(customPointsMap[index])
             if (!Number.isNaN(value) && value !== 0) {
-              addPoints(index, value)
+              addPointsWithText(value)
               setCustomPointsMap(prev => ({ ...prev, [index]: '' }))
             }
           }}
@@ -93,9 +108,16 @@ export default function DevCard({
         <ul className="mt-2 text-sm space-y-1">
           {dev.history.map((entry, i) => (
             <li key={i} className="flex justify-between items-center">
-              <span>
-                {entry.value > 0 ? '+' : ''}
-                {entry.value} {pointsType}
+              <span className="min-w-0">
+                <span>
+                  {entry.value > 0 ? '+' : ''}
+                  {entry.value} {pointsType}
+                </span>
+                {entry.text && (
+                  <span className="ml-2 break-all text-gray-500 dark:text-gray-400">
+                    - {entry.text}
+                  </span>
+                )}
               </span>
               <button
                 onClick={() => removeHistoryItem(index, i)}

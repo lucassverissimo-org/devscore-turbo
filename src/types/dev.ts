@@ -1,6 +1,7 @@
 export type HistoryItem = {
   value: number
   timestamp: string
+  text?: string
 }
 
 export type Dev = {

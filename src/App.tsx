@@ -10,6 +10,7 @@ import DevCard from './components/DevCard'
 import Summary from './components/Summary'
 import SettingsModal from './components/SettingsModal'
 import { Dev, NO_TEAM_VALUE, PointsType, Team, TeamSelection } from './types'
+import { normalizeHistoryText } from './lib/utils/history'
 
 type NewDev = { name: string; capacity: string }
 
@@ -46,7 +47,12 @@ function parseStoredLocalDevs(): Dev[] {
               typeof historyItem.value === 'number' &&
               typeof historyItem.timestamp === 'string'
             ) {
-              entries.push({ value: historyItem.value, timestamp: historyItem.timestamp })
+              const text = normalizeHistoryText(historyItem.text)
+              entries.push({
+                value: historyItem.value,
+                timestamp: historyItem.timestamp,
+                ...(text ? { text } : {}),
+              })
             }
             return entries
           }, [])
@@ -256,13 +262,17 @@ function App() {
   const updateDev = (index: number, updated: Partial<Dev>) =>
     setCurrentDevs(prev => prev.map((dev, i) => (i === index ? { ...dev, ...updated } : dev)))
 
-  const addPoints = (index: number, value: number) => {
+  const addPoints = (index: number, value: number, textValue?: string) => {
     const dev = devs[index]
     if (!dev) return
+    const text = normalizeHistoryText(textValue)
 
     updateDev(index, {
       points: dev.points + value,
-      history: [...dev.history, { value, timestamp: new Date().toISOString() }],
+      history: [
+        ...dev.history,
+        { value, timestamp: new Date().toISOString(), ...(text ? { text } : {}) },
+      ],
     })
   }
 
