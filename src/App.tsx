@@ -21,6 +21,7 @@ import { normalizeHistoryText } from './lib/utils/history'
 import {
   SPRINT_PLANNING_STORAGE_KEY,
   createEmptySprintPlanning,
+  isSprintMemberType,
   loadStoredSprintPlanning,
 } from './lib/utils/sprintPlanning'
 import {
@@ -32,6 +33,7 @@ import {
 
 type NewDev = { name: string; capacity: string }
 type ActiveTab = 'distribution' | 'sprint'
+type DistributionSyncMode = 'replace' | 'preserve'
 
 const LOCAL_DEVS_STORAGE_KEY = 'devscore.localDevs'
 const LOCAL_POINTS_TYPE_STORAGE_KEY = 'devscore.localPointsType'
@@ -77,10 +79,17 @@ function parseStoredLocalDevs(): Dev[] {
           }, [])
         : []
 
+      const memberType = isSprintMemberType(item.memberType)
+        ? item.memberType
+        : isSprintMemberType(item.type)
+          ? item.type
+          : undefined
+
       acc.push({
         id: typeof item.id === 'string' ? item.id : undefined,
         idTeam: undefined,
         name: item.name,
+        ...(memberType ? { memberType } : {}),
         capacity: item.capacity,
         points: typeof item.points === 'number' ? item.points : 0,
         history,
@@ -106,6 +115,14 @@ function createId(): string {
   }
 
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function getMemberNameKey(name: string): string {
+  return name.trim().toLowerCase()
+}
+
+function hasDistributionLaunches(devs: Dev[]): boolean {
+  return devs.some(dev => dev.points !== 0 || dev.history.length > 0)
 }
 
 function getDefaultTeamSelection(teams: Team[]): TeamSelection {
@@ -144,6 +161,7 @@ function App() {
   const [sprintMessage, setSprintMessage] = useState('')
   const [planningSaveMessage, setPlanningSaveMessage] = useState('')
   const [distributionSaveMessage, setDistributionSaveMessage] = useState('')
+  const [pendingDistributionPlanning, setPendingDistributionPlanning] = useState<SprintPlanningData | null>(null)
   const [planningSnapshot, setPlanningSnapshot] = useState(() => JSON.stringify(loadStoredSprintPlanning()))
   const [distributionSnapshot, setDistributionSnapshot] = useState(() => {
     const storedDistribution = loadStoredSprintDistribution()
@@ -360,6 +378,7 @@ function App() {
         id: dev.id,
         idTeam: dev.idTeam ?? selectedTeamId,
         name: dev.name ?? '',
+        memberType: dev.memberType,
         capacity: dev.capacity ?? 14,
         points: 0,
         history: [],
@@ -440,17 +459,32 @@ function App() {
     })
   }
 
-  const distributeSprintTasks = (planning: SprintPlanningData) => {
+  const applySprintDistribution = (planning: SprintPlanningData, mode: DistributionSyncMode) => {
+    const existingById = new Map(
+      localDevs.flatMap(dev => (dev.id ? [[dev.id, dev] as const] : []))
+    )
+    const existingByName = new Map(
+      localDevs.map(dev => [getMemberNameKey(dev.name), dev] as const)
+    )
     const nextDevs: Dev[] = planning.members
       .filter(member => member.active && member.name.trim())
-      .map(member => ({
-        idTeam: undefined,
-        name: member.name.trim(),
-        capacity: member.capacity,
-        points: 0,
-        history: [],
-        customPoints: '',
-      }))
+      .map(member => {
+        const memberName = member.name.trim()
+        const existing = mode === 'preserve'
+          ? existingById.get(member.id) ?? existingByName.get(getMemberNameKey(memberName))
+          : undefined
+
+        return {
+          id: member.id,
+          idTeam: undefined,
+          name: memberName,
+          memberType: member.type,
+          capacity: member.capacity,
+          points: existing?.points ?? 0,
+          history: existing?.history ?? [],
+          customPoints: '',
+        }
+      })
 
     setSelectedTeamId(NO_TEAM_VALUE)
     setLocalPointsType('hrs')
@@ -458,6 +492,22 @@ function App() {
     setDevs(nextDevs)
     setCustomPointsMap({})
     setActiveTab('distribution')
+  }
+
+  const distributeSprintTasks = (planning: SprintPlanningData) => {
+    if (hasDistributionLaunches(localDevs)) {
+      setPendingDistributionPlanning(planning)
+      return
+    }
+
+    applySprintDistribution(planning, 'replace')
+  }
+
+  const resolvePendingDistribution = (mode: DistributionSyncMode) => {
+    if (!pendingDistributionPlanning) return
+
+    applySprintDistribution(pendingDistributionPlanning, mode)
+    setPendingDistributionPlanning(null)
   }
 
   const selectSprintRecord = (recordId: string) => {
@@ -809,6 +859,37 @@ function App() {
           setIsSprintEnabled={setIsSprintEnabled}
           onClose={() => setShowSettings(false)}
         />
+      )}
+
+      {pendingDistributionPlanning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl dark:bg-gray-800">
+            <h2 className="text-lg font-semibold">Distribuicao ja preenchida</h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+              Ja existem lancamentos na guia Distribuicao. Escolha como aplicar os membros da Sprint.
+            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button
+                onClick={() => resolvePendingDistribution('replace')}
+                className="rounded bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-700"
+              >
+                Substituir distribuicao
+              </button>
+              <button
+                onClick={() => resolvePendingDistribution('preserve')}
+                className="rounded bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                Manter lancamentos e sincronizar membros/capacity
+              </button>
+            </div>
+            <button
+              onClick={() => setPendingDistributionPlanning(null)}
+              className="mt-4 w-full rounded bg-gray-100 px-4 py-2 text-sm text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

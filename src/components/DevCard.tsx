@@ -2,6 +2,11 @@ import React from 'react'
 import { getColor } from '../lib/utils/colors'
 import { getPointValues } from '../lib/utils/getPointValues'
 import { HISTORY_TEXT_MAX_LENGTH } from '../lib/utils/history'
+import {
+  getSprintMemberTypeAccentClass,
+  getSprintMemberTypeBadgeClass,
+  getSprintMemberTypeShortLabel,
+} from '../lib/utils/sprintPlanning'
 import { Dev, PointsType } from '../types'
 
 interface DevCardProps {
@@ -33,15 +38,27 @@ export default function DevCard({
   const color = getColor(percent)
   const [historyText, setHistoryText] = React.useState('')
   const storyListId = `story-options-${index}`
+  const typeAccentClass = dev.memberType
+    ? `border-l-4 ${getSprintMemberTypeAccentClass(dev.memberType)}`
+    : ''
 
   const addPointsWithText = (value: number) => {
     addPoints(index, value, historyText)
   }
 
   return (
-    <div className="p-4 bg-white dark:bg-gray-800 shadow rounded transition-colors">
+    <div className={`p-4 bg-white dark:bg-gray-800 shadow rounded transition-colors ${typeAccentClass}`}>
       <div className="flex justify-between items-center mb-2">
-        <strong>{dev.name}</strong>
+        <div className="flex min-w-0 items-center gap-2">
+          <strong className="truncate">{dev.name}</strong>
+          {dev.memberType && (
+            <span
+              className={`shrink-0 rounded border px-2 py-0.5 text-[11px] font-semibold leading-5 ${getSprintMemberTypeBadgeClass(dev.memberType)}`}
+            >
+              {getSprintMemberTypeShortLabel(dev.memberType)}
+            </span>
+          )}
+        </div>
         <button onClick={() => removeDev(index)} className="text-red-500 hover:underline text-sm">
           Remover
         </button>

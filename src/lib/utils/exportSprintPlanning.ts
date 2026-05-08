@@ -3,6 +3,7 @@ import type { Dev, SprintDistributionData, SprintMemberType, SprintPlanningData 
 import {
   SPRINT_MEMBER_TYPES,
   getSprintMemberTypeLabel,
+  getSprintMemberTypeShortLabel,
   getSprintSummary,
   getTaskTotal,
 } from './sprintPlanning'
@@ -66,6 +67,39 @@ function getBalanceFontArgb(fillArgb: string): string {
     : 'FFFFFFFF'
 }
 
+function getMemberTypeFillArgb(type: SprintMemberType | undefined): string | undefined {
+  if (type === 'dev') return 'FFDBEAFE'
+  if (type === 'func') return 'FFFFEDD5'
+  if (type === 'arq') return 'FFDCFCE7'
+
+  return undefined
+}
+
+function getMemberTypeFontArgb(type: SprintMemberType | undefined): string | undefined {
+  if (type === 'dev') return 'FF1E40AF'
+  if (type === 'func') return 'FF9A3412'
+  if (type === 'arq') return 'FF166534'
+
+  return undefined
+}
+
+function applyMemberTypeStyle(sheet: Worksheet, rowNumber: number, colNumber: number, type: SprintMemberType | undefined) {
+  const fillArgb = getMemberTypeFillArgb(type)
+  const fontArgb = getMemberTypeFontArgb(type)
+  if (!fillArgb || !fontArgb) return
+
+  const cell = sheet.getCell(rowNumber, colNumber)
+  cell.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: fillArgb },
+  }
+  cell.font = {
+    bold: true,
+    color: { argb: fontArgb },
+  }
+}
+
 function setRowValues(sheet: Worksheet, rowNumber: number, values: unknown[]) {
   values.forEach((value, index) => {
     sheet.getCell(rowNumber, index + 1).value = value as CellValue
@@ -117,6 +151,12 @@ function formatHistorySummary(dev: Dev): string {
     .join('\n')
 }
 
+function formatDistributionMemberName(dev: Dev): string {
+  return dev.memberType
+    ? `${dev.name} (${getSprintMemberTypeShortLabel(dev.memberType)})`
+    : dev.name
+}
+
 function addDistributionWorksheet(workbook: Workbook, distribution: SprintDistributionData, now: Date): Worksheet {
   const sheet = workbook.addWorksheet('Distribuicao', {
     views: [{ state: 'frozen', ySplit: 4 }],
@@ -150,7 +190,7 @@ function addDistributionWorksheet(workbook: Workbook, distribution: SprintDistri
     const rowNumber = startRow + index
     const percent = dev.capacity > 0 ? dev.points / dev.capacity : 0
     setRowValues(sheet, rowNumber, [
-      dev.name,
+      formatDistributionMemberName(dev),
       dev.capacity,
       dev.points,
       null,
@@ -164,6 +204,7 @@ function addDistributionWorksheet(workbook: Workbook, distribution: SprintDistri
     sheet.getCell(rowNumber, 5).value = percent
     sheet.getCell(rowNumber, 5).numFmt = '0%'
     styleDataRange(sheet, rowNumber, 1, 6)
+    applyMemberTypeStyle(sheet, rowNumber, 1, dev.memberType)
     sheet.getCell(rowNumber, 6).alignment = { vertical: 'top', wrapText: true }
 
     if (dev.capacity - dev.points < 0) {
@@ -207,7 +248,8 @@ function addDistributionWorksheet(workbook: Workbook, distribution: SprintDistri
 
   const historyRows = distribution.devs.flatMap(dev =>
     dev.history.map(entry => ({
-      memberName: dev.name,
+      memberName: formatDistributionMemberName(dev),
+      memberType: dev.memberType,
       value: entry.value,
       text: entry.text ?? '',
     }))
@@ -225,6 +267,7 @@ function addDistributionWorksheet(workbook: Workbook, distribution: SprintDistri
         entry.text,
       ])
       styleDataRange(sheet, rowNumber, 1, 3)
+      applyMemberTypeStyle(sheet, rowNumber, 1, entry.memberType)
     })
   }
 
@@ -383,6 +426,7 @@ export async function exportSprintPlanningXlsx(
       formatDate(member.observationEndDate),
     ])
     styleDataRange(sheet, rowNumber, 1, 7)
+    applyMemberTypeStyle(sheet, rowNumber, 3, member.type)
 
     if (!member.active) {
       for (let col = 1; col <= 7; col += 1) {
@@ -462,6 +506,7 @@ export async function exportSprintPlanningXlsx(
       result: total.balance,
     }
     styleDataRange(sheet, rowNumber, 9, 13)
+    applyMemberTypeStyle(sheet, rowNumber, 9, type)
     const balanceFillArgb = getBalanceFillArgb(total.points, total.capacity)
     const balanceCell = sheet.getCell(rowNumber, 13)
     balanceCell.fill = {

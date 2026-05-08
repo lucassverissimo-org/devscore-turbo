@@ -33,6 +33,44 @@ export function getSprintMemberTypeLabel(type: SprintMemberType): string {
   return labels[type]
 }
 
+export function getSprintMemberTypeShortLabel(type: SprintMemberType): string {
+  const labels: Record<SprintMemberType, string> = {
+    dev: 'DEV',
+    func: 'FUNC',
+    arq: 'ARQ',
+  }
+
+  return labels[type]
+}
+
+export function getSprintMemberTypeBadgeClass(type: SprintMemberType): string {
+  const classes: Record<SprintMemberType, string> = {
+    dev: 'border-blue-200 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200',
+    func: 'border-orange-200 bg-orange-100 text-orange-800 dark:border-orange-800 dark:bg-orange-950/60 dark:text-orange-200',
+    arq: 'border-green-200 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-950/60 dark:text-green-200',
+  }
+
+  return classes[type]
+}
+
+export function getSprintMemberTypeAccentClass(type: SprintMemberType): string {
+  const classes: Record<SprintMemberType, string> = {
+    dev: 'border-l-blue-500',
+    func: 'border-l-orange-500',
+    arq: 'border-l-green-600',
+  }
+
+  return classes[type]
+}
+
+export function isSprintMemberType(value: unknown): value is SprintMemberType {
+  return SPRINT_MEMBER_TYPES.includes(value as SprintMemberType)
+}
+
+export function normalizeSprintMemberType(value: unknown): SprintMemberType {
+  return isSprintMemberType(value) ? value : 'dev'
+}
+
 export function createEmptySprintPlanning(): SprintPlanningData {
   return {
     sprintName: '',
@@ -110,12 +148,6 @@ function normalizeNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
-function normalizeMemberType(value: unknown): SprintMemberType {
-  return SPRINT_MEMBER_TYPES.includes(value as SprintMemberType)
-    ? value as SprintMemberType
-    : 'dev'
-}
-
 export function normalizeSprintPlanning(value: unknown): SprintPlanningData {
   if (!isRecord(value)) return createEmptySprintPlanning()
 
@@ -133,7 +165,7 @@ export function normalizeSprintPlanning(value: unknown): SprintPlanningData {
       id: member.id,
       active: typeof member.active === 'boolean' ? member.active : true,
       name: member.name,
-      type: normalizeMemberType(member.type),
+      type: normalizeSprintMemberType(member.type),
       capacity: normalizeNumber(member.capacity),
       observation: typeof member.observation === 'string' ? member.observation : '',
       observationStartDate: typeof member.observationStartDate === 'string' ? member.observationStartDate : '',

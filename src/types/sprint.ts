@@ -1,7 +1,5 @@
-import type { Dev } from './dev'
+import type { Dev, SprintMemberType } from './dev'
 import type { PointsType } from './team'
-
-export type SprintMemberType = 'dev' | 'func' | 'arq'
 
 export type SprintMember = {
   id: string

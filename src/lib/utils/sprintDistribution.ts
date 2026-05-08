@@ -1,5 +1,6 @@
 import { Dev, PointsType, SprintDistributionData } from '../../types'
 import { normalizeHistoryText } from './history'
+import { isSprintMemberType } from './sprintPlanning'
 
 export const SPRINT_DISTRIBUTION_STORAGE_KEY = 'devscore.sprintDistribution'
 
@@ -49,10 +50,17 @@ export function normalizeDistributionDevs(value: unknown): Dev[] {
         }, [])
       : []
 
+    const memberType = isSprintMemberType(item.memberType)
+      ? item.memberType
+      : isSprintMemberType(item.type)
+        ? item.type
+        : undefined
+
     acc.push({
       id: typeof item.id === 'string' ? item.id : undefined,
       idTeam: undefined,
       name: item.name,
+      ...(memberType ? { memberType } : {}),
       capacity: normalizeNumber(item.capacity),
       points: normalizeNumber(item.points),
       history,

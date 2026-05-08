@@ -5,7 +5,10 @@ import { exportSprintPlanningXlsx } from '../lib/utils/exportSprintPlanning'
 import { getColor } from '../lib/utils/colors'
 import {
   SPRINT_MEMBER_TYPES,
+  getSprintMemberTypeAccentClass,
+  getSprintMemberTypeBadgeClass,
   getSprintMemberTypeLabel,
+  getSprintMemberTypeShortLabel,
   getSprintSummary,
   getTaskTotal,
 } from '../lib/utils/sprintPlanning'
@@ -362,7 +365,13 @@ export default function SprintPlanning({
                 const balanceColorClass = getBalanceColorClass(total.points, total.capacity)
                 return (
                   <tr key={type} className="border-t border-gray-100 dark:border-gray-700">
-                    <td className="py-2 pr-2 font-medium">{getSprintMemberTypeLabel(type)}</td>
+                    <td className="py-2 pr-2 font-medium">
+                      <span
+                        className={`inline-flex min-w-[64px] justify-center rounded border px-2 py-1 text-xs font-semibold ${getSprintMemberTypeBadgeClass(type)}`}
+                      >
+                        {getSprintMemberTypeShortLabel(type)}
+                      </span>
+                    </td>
                     <td className="py-2 px-2">{total.members}</td>
                     <td className="py-2 px-2">{formatNumber(total.capacity)}</td>
                     <td className="py-2 px-2">{formatNumber(total.points)}</td>
@@ -415,7 +424,7 @@ export default function SprintPlanning({
           <select
             value={newMember.type}
             onChange={e => setNewMember(current => ({ ...current, type: e.target.value as SprintMemberType }))}
-            className="border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
+            className={`border p-2 rounded ${getSprintMemberTypeBadgeClass(newMember.type)}`}
           >
             {SPRINT_MEMBER_TYPES.map(type => (
               <option key={type} value={type}>{getSprintMemberTypeLabel(type)}</option>
@@ -444,7 +453,7 @@ export default function SprintPlanning({
             <div
               key={member.id}
               data-testid="sprint-member-row"
-              className={`py-4 first:pt-0 last:pb-0 ${member.active ? '' : 'opacity-70'}`}
+              className={`border-l-4 py-4 pl-3 first:pt-0 last:pb-0 ${getSprintMemberTypeAccentClass(member.type)} ${member.active ? '' : 'opacity-70'}`}
             >
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[96px_minmax(150px,1fr)_112px_112px_minmax(150px,1fr)_140px_140px_40px] lg:items-end">
                 <label className="space-y-1">
@@ -474,7 +483,7 @@ export default function SprintPlanning({
                   <select
                     value={member.type}
                     onChange={e => updateMember(member.id, 'type', e.target.value)}
-                    className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
+                    className={`h-10 w-full rounded border p-2 ${getSprintMemberTypeBadgeClass(member.type)}`}
                   >
                     {SPRINT_MEMBER_TYPES.map(type => (
                       <option key={type} value={type}>{getSprintMemberTypeLabel(type)}</option>
