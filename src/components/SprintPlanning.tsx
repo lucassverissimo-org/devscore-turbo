@@ -1,16 +1,13 @@
 import React from 'react'
 import { ChevronDown, ChevronRight, Download, ListPlus, Plus, RotateCcw, Shuffle, Trash2, Users } from 'lucide-react'
-import { SprintMemberType, SprintPlanningData, SprintTask } from '../types'
+import { SprintDistributionData, SprintMemberType, SprintPlanningData, SprintTask } from '../types'
 import { exportSprintPlanningXlsx } from '../lib/utils/exportSprintPlanning'
 import { getColor } from '../lib/utils/colors'
 import {
   SPRINT_MEMBER_TYPES,
-  SPRINT_PLANNING_STORAGE_KEY,
-  createEmptySprintPlanning,
   getSprintMemberTypeLabel,
   getSprintSummary,
   getTaskTotal,
-  normalizeSprintPlanning,
 } from '../lib/utils/sprintPlanning'
 
 type NewMemberForm = {
@@ -30,7 +27,14 @@ type NewTaskForm = {
 type TaskPointField = 'arqPoints' | 'funcPoints' | 'devPoints'
 
 type SprintPlanningProps = {
+  planning: SprintPlanningData
+  setPlanning: React.Dispatch<React.SetStateAction<SprintPlanningData>>
+  distribution: SprintDistributionData
   onDistributeTasks: (planning: SprintPlanningData) => void
+  onSavePlanning: () => void
+  isSavingPlanning: boolean
+  savePlanningMessage: string
+  hasPlanningChanges: boolean
 }
 
 const emptyMemberForm: NewMemberForm = { name: '', type: 'dev', capacity: '' }
@@ -85,19 +89,16 @@ function getBalanceTextClass(backgroundClass: string): string {
     : 'text-white'
 }
 
-function loadSprintPlanning(): SprintPlanningData {
-  if (typeof window === 'undefined') return createEmptySprintPlanning()
-
-  try {
-    const stored = window.localStorage.getItem(SPRINT_PLANNING_STORAGE_KEY)
-    return stored ? normalizeSprintPlanning(JSON.parse(stored)) : createEmptySprintPlanning()
-  } catch {
-    return createEmptySprintPlanning()
-  }
-}
-
-export default function SprintPlanning({ onDistributeTasks }: SprintPlanningProps) {
-  const [planning, setPlanning] = React.useState<SprintPlanningData>(() => loadSprintPlanning())
+export default function SprintPlanning({
+  planning,
+  setPlanning,
+  distribution,
+  onDistributeTasks,
+  onSavePlanning,
+  isSavingPlanning,
+  savePlanningMessage,
+  hasPlanningChanges,
+}: SprintPlanningProps) {
   const [newMember, setNewMember] = React.useState<NewMemberForm>(emptyMemberForm)
   const [newTask, setNewTask] = React.useState<NewTaskForm>(emptyTaskForm)
   const [isExporting, setIsExporting] = React.useState(false)
@@ -105,11 +106,6 @@ export default function SprintPlanning({ onDistributeTasks }: SprintPlanningProp
   const [isMembersSectionOpen, setIsMembersSectionOpen] = React.useState(true)
 
   const summary = React.useMemo(() => getSprintSummary(planning), [planning])
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(SPRINT_PLANNING_STORAGE_KEY, JSON.stringify(planning))
-  }, [planning])
 
   const updatePlanning = (updater: (current: SprintPlanningData) => SprintPlanningData) => {
     setPlanning(current => updater(current))
@@ -137,7 +133,6 @@ export default function SprintPlanning({ onDistributeTasks }: SprintPlanningProp
         },
       ],
     }))
-    setNewMember(emptyMemberForm)
   }
 
   const updateMember = (
@@ -195,7 +190,6 @@ export default function SprintPlanning({ onDistributeTasks }: SprintPlanningProp
       ...current,
       tasks: [...current.tasks, task],
     }))
-    setNewTask(emptyTaskForm)
   }
 
   const updateTask = (id: string, field: keyof SprintTask, value: string | boolean) => {
@@ -228,14 +222,25 @@ export default function SprintPlanning({ onDistributeTasks }: SprintPlanningProp
     }))
   }
 
-  const clearSprint = () => {
-    const confirmed = window.confirm('Limpar todos os dados da aba Sprint?')
+  const clearMembers = () => {
+    const confirmed = window.confirm('Limpar todos os membros da sprint?')
     if (!confirmed) return
 
-    setPlanning(createEmptySprintPlanning())
-    setNewMember(emptyMemberForm)
-    setNewTask(emptyTaskForm)
-    setExportError('')
+    updatePlanning(current => ({
+      ...current,
+      members: [],
+      tasks: current.tasks.map(task => ({ ...task, memberId: undefined })),
+    }))
+  }
+
+  const clearTasks = () => {
+    const confirmed = window.confirm('Limpar todas as estorias e tasks?')
+    if (!confirmed) return
+
+    updatePlanning(current => ({
+      ...current,
+      tasks: [],
+    }))
   }
 
   const exportXlsx = async () => {
@@ -243,7 +248,7 @@ export default function SprintPlanning({ onDistributeTasks }: SprintPlanningProp
     setExportError('')
 
     try {
-      await exportSprintPlanningXlsx(planning)
+      await exportSprintPlanningXlsx(planning, distribution)
     } catch {
       setExportError('Nao foi possivel exportar a planilha.')
     } finally {
@@ -260,8 +265,7 @@ export default function SprintPlanning({ onDistributeTasks }: SprintPlanningProp
   return (
     <div className="space-y-6">
       <section className="p-4 bg-white dark:bg-gray-800 shadow rounded transition-colors space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-[minmax(260px,1fr)_170px_170px]">
+        <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_150px_150px_auto] lg:items-end">
             <label className="space-y-1">
               <span className="block text-sm font-medium text-gray-700 dark:text-gray-200">Sprint</span>
               <input
@@ -290,9 +294,15 @@ export default function SprintPlanning({ onDistributeTasks }: SprintPlanningProp
                 className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
               />
             </label>
-          </div>
 
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={onSavePlanning}
+              disabled={isSavingPlanning || !planning.sprintName.trim()}
+              className="inline-flex items-center gap-2 bg-blue-500 text-white px-3 py-2 rounded hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSavingPlanning ? 'Salvando' : hasPlanningChanges ? 'Salvar' : 'Salvar'}
+            </button>
             <button
               onClick={exportXlsx}
               disabled={!canExport || isExporting}
@@ -309,18 +319,14 @@ export default function SprintPlanning({ onDistributeTasks }: SprintPlanningProp
               <Shuffle size={18} />
               Distribuir tasks
             </button>
-            <button
-              onClick={clearSprint}
-              className="inline-flex items-center gap-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 px-3 py-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-            >
-              <RotateCcw size={18} />
-              Limpar
-            </button>
           </div>
         </div>
 
         {exportError && (
           <p className="text-sm text-red-600 dark:text-red-300">{exportError}</p>
+        )}
+        {savePlanningMessage && (
+          <p className="text-sm text-gray-600 dark:text-gray-300">{savePlanningMessage}</p>
         )}
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -386,6 +392,14 @@ export default function SprintPlanning({ onDistributeTasks }: SprintPlanningProp
             <Users size={20} className="shrink-0 text-green-700 dark:text-green-300" />
             <h2 className="text-lg font-semibold">Membros da sprint</h2>
             {isMembersSectionOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+          </button>
+          <button
+            onClick={clearMembers}
+            disabled={!planning.members.length}
+            className="inline-flex items-center gap-2 rounded bg-gray-100 px-3 py-2 text-sm text-gray-800 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+          >
+            <RotateCcw size={16} />
+            Limpar
           </button>
         </div>
 
@@ -526,9 +540,19 @@ export default function SprintPlanning({ onDistributeTasks }: SprintPlanningProp
       </section>
 
       <section className="p-4 bg-white dark:bg-gray-800 shadow rounded transition-colors space-y-4">
-        <div className="flex items-center gap-2">
-          <ListPlus size={20} className="text-green-700 dark:text-green-300" />
-          <h2 className="text-lg font-semibold">Estorias e tasks</h2>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <ListPlus size={20} className="text-green-700 dark:text-green-300" />
+            <h2 className="text-lg font-semibold">Estorias e tasks</h2>
+          </div>
+          <button
+            onClick={clearTasks}
+            disabled={!planning.tasks.length}
+            className="inline-flex items-center gap-2 rounded bg-gray-100 px-3 py-2 text-sm text-gray-800 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+          >
+            <RotateCcw size={16} />
+            Limpar
+          </button>
         </div>
 
         <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/30">

@@ -1,3 +1,6 @@
+import type { Dev } from './dev'
+import type { PointsType } from './team'
+
 export type SprintMemberType = 'dev' | 'func' | 'arq'
 
 export type SprintMember = {
@@ -28,4 +31,23 @@ export type SprintPlanningData = {
   endDate: string
   members: SprintMember[]
   tasks: SprintTask[]
+}
+
+export type SprintDistributionData = {
+  pointsType: PointsType
+  devs: Dev[]
+}
+
+export type SprintPlanningRecord = {
+  id: string
+  project: string
+  name: string
+  startDate: string
+  endDate: string
+  planningData: SprintPlanningData
+  distributionData: SprintDistributionData
+  planningUpdatedAt: string | null
+  distributionUpdatedAt: string | null
+  createdAt: string
+  updatedAt: string
 }

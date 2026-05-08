@@ -14,6 +14,7 @@ interface DevCardProps {
   setCustomPointsMap: React.Dispatch<React.SetStateAction<Record<number, string>>>
   removeDev: (index: number) => void
   removeHistoryItem: (devIndex: number, histIndex: number) => void
+  storyOptions?: string[]
 }
 
 export default function DevCard({
@@ -26,14 +27,15 @@ export default function DevCard({
   setCustomPointsMap,
   removeDev,
   removeHistoryItem,
+  storyOptions = [],
 }: DevCardProps) {
   const percent = dev.capacity > 0 ? Math.floor((dev.points / dev.capacity) * 100) : 0
   const color = getColor(percent)
   const [historyText, setHistoryText] = React.useState('')
+  const storyListId = `story-options-${index}`
 
   const addPointsWithText = (value: number) => {
     addPoints(index, value, historyText)
-    setHistoryText('')
   }
 
   return (
@@ -73,12 +75,20 @@ export default function DevCard({
         ))}
         <input
           type="text"
-          placeholder="Estória/Tarefa"
+          placeholder="Estoria/Tarefa"
           maxLength={HISTORY_TEXT_MAX_LENGTH}
+          list={storyOptions.length ? storyListId : undefined}
           className="border p-1 rounded w-32 text-sm bg-white dark:bg-gray-700 dark:border-gray-600"
           onChange={e => setHistoryText(e.target.value)}
           value={historyText}
         />
+        {!!storyOptions.length && (
+          <datalist id={storyListId}>
+            {storyOptions.map(option => (
+              <option key={option} value={option} />
+            ))}
+          </datalist>
+        )}
         <input
           type="number"
           placeholder="Personalizado"

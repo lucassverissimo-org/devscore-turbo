@@ -1,5 +1,5 @@
 import type { CellValue, Row, Workbook, Worksheet } from 'exceljs'
-import { SprintMemberType, SprintPlanningData } from '../../types'
+import type { Dev, SprintDistributionData, SprintMemberType, SprintPlanningData } from '../../types'
 import {
   SPRINT_MEMBER_TYPES,
   getSprintMemberTypeLabel,
@@ -108,6 +108,138 @@ function styleSectionTitle(sheet: Worksheet, rowNumber: number, fromCol: number,
   cell.alignment = { horizontal: 'left', vertical: 'middle' }
 }
 
+function formatHistorySummary(dev: Dev): string {
+  return dev.history
+    .map(entry => {
+      const text = entry.text ? ` - ${entry.text}` : ''
+      return `${entry.value > 0 ? '+' : ''}${entry.value}${text}`
+    })
+    .join('\n')
+}
+
+function addDistributionWorksheet(workbook: Workbook, distribution: SprintDistributionData, now: Date): Worksheet {
+  const sheet = workbook.addWorksheet('Distribuicao', {
+    views: [{ state: 'frozen', ySplit: 4 }],
+  })
+
+  sheet.columns = [
+    { width: 28 },
+    { width: 12 },
+    { width: 12 },
+    { width: 12 },
+    { width: 14 },
+    { width: 42 },
+  ]
+
+  sheet.mergeCells('A1:F1')
+  const title = sheet.getCell('A1')
+  title.value = 'Distribuicao'
+  title.font = { bold: true, size: 16, color: { argb: 'FF1F3B16' } }
+  title.alignment = { horizontal: 'left', vertical: 'middle' }
+
+  sheet.mergeCells('A2:F2')
+  sheet.getCell('A2').value = `Unidade: ${distribution.pointsType} | Exportado em ${formatDateTime(now)}`
+  sheet.getCell('A2').font = { color: { argb: 'FF555555' } }
+
+  const headerRow = 4
+  const startRow = headerRow + 1
+  setRowValues(sheet, headerRow, ['Membro', 'Capacity', 'Alocado', 'Saldo', 'Utilizacao', 'Historico resumido'])
+  styleHeader(sheet.getRow(headerRow), 1, 6)
+
+  distribution.devs.forEach((dev, index) => {
+    const rowNumber = startRow + index
+    const percent = dev.capacity > 0 ? dev.points / dev.capacity : 0
+    setRowValues(sheet, rowNumber, [
+      dev.name,
+      dev.capacity,
+      dev.points,
+      null,
+      percent,
+      formatHistorySummary(dev),
+    ])
+    sheet.getCell(rowNumber, 4).value = {
+      formula: `B${rowNumber}-C${rowNumber}`,
+      result: dev.capacity - dev.points,
+    }
+    sheet.getCell(rowNumber, 5).value = percent
+    sheet.getCell(rowNumber, 5).numFmt = '0%'
+    styleDataRange(sheet, rowNumber, 1, 6)
+    sheet.getCell(rowNumber, 6).alignment = { vertical: 'top', wrapText: true }
+
+    if (dev.capacity - dev.points < 0) {
+      sheet.getCell(rowNumber, 4).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFFD7D7' },
+      }
+    }
+  })
+
+  const lastDevRow = Math.max(startRow, startRow + distribution.devs.length - 1)
+  if (!distribution.devs.length) {
+    setRowValues(sheet, startRow, ['Nenhum membro distribuido', 0, 0, 0, 0, ''])
+    styleDataRange(sheet, startRow, 1, 6)
+  }
+
+  const totalRow = lastDevRow + 1
+  setRowValues(sheet, totalRow, ['Total', null, null, null, null, ''])
+  sheet.getCell(totalRow, 2).value = {
+    formula: `SUM(B${startRow}:B${lastDevRow})`,
+    result: distribution.devs.reduce((sum, dev) => sum + dev.capacity, 0),
+  }
+  sheet.getCell(totalRow, 3).value = {
+    formula: `SUM(C${startRow}:C${lastDevRow})`,
+    result: distribution.devs.reduce((sum, dev) => sum + dev.points, 0),
+  }
+  sheet.getCell(totalRow, 4).value = {
+    formula: `B${totalRow}-C${totalRow}`,
+    result: distribution.devs.reduce((sum, dev) => sum + dev.capacity - dev.points, 0),
+  }
+  styleHeader(sheet.getRow(totalRow), 1, 6)
+
+  const historyTitleRow = totalRow + 3
+  styleSectionTitle(sheet, historyTitleRow, 1, 3)
+  sheet.getCell(historyTitleRow, 1).value = 'Historico de lancamentos'
+
+  const historyHeaderRow = historyTitleRow + 1
+  setRowValues(sheet, historyHeaderRow, ['Membro', 'Valor', 'Texto'])
+  styleHeader(sheet.getRow(historyHeaderRow), 1, 3)
+
+  const historyRows = distribution.devs.flatMap(dev =>
+    dev.history.map(entry => ({
+      memberName: dev.name,
+      value: entry.value,
+      text: entry.text ?? '',
+    }))
+  )
+
+  if (!historyRows.length) {
+    setRowValues(sheet, historyHeaderRow + 1, ['Sem historico', '', ''])
+    styleDataRange(sheet, historyHeaderRow + 1, 1, 3)
+  } else {
+    historyRows.forEach((entry, index) => {
+      const rowNumber = historyHeaderRow + 1 + index
+      setRowValues(sheet, rowNumber, [
+        entry.memberName,
+        entry.value,
+        entry.text,
+      ])
+      styleDataRange(sheet, rowNumber, 1, 3)
+    })
+  }
+
+  for (let row = 1; row <= historyHeaderRow + Math.max(historyRows.length, 1); row += 1) {
+    sheet.getCell(row, 2).numFmt = '0.0'
+  }
+
+  sheet.eachRow(row => {
+    row.height = 22
+  })
+  sheet.getRow(1).height = 28
+
+  return sheet
+}
+
 async function downloadWorkbook(workbook: Workbook, fileName: string) {
   const buffer = await workbook.xlsx.writeBuffer()
   const blob = new Blob([buffer as BlobPart], { type: XLSX_MIME_TYPE })
@@ -121,7 +253,10 @@ async function downloadWorkbook(workbook: Workbook, fileName: string) {
   URL.revokeObjectURL(url)
 }
 
-export async function exportSprintPlanningXlsx(planning: SprintPlanningData) {
+export async function exportSprintPlanningXlsx(
+  planning: SprintPlanningData,
+  distribution: SprintDistributionData,
+) {
   const ExcelJS = await import('exceljs')
   const workbook = new ExcelJS.default.Workbook()
   const now = new Date()
@@ -350,6 +485,7 @@ export async function exportSprintPlanningXlsx(planning: SprintPlanningData) {
     row.height = 22
   })
   sheet.getRow(1).height = 28
+  addDistributionWorksheet(workbook, distribution, now)
 
   await downloadWorkbook(workbook, `${sanitizeFileName(planning.sprintName)}.xlsx`)
 }

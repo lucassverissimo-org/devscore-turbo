@@ -43,6 +43,17 @@ export function createEmptySprintPlanning(): SprintPlanningData {
   }
 }
 
+export function loadStoredSprintPlanning(): SprintPlanningData {
+  if (typeof window === 'undefined') return createEmptySprintPlanning()
+
+  try {
+    const stored = window.localStorage.getItem(SPRINT_PLANNING_STORAGE_KEY)
+    return stored ? normalizeSprintPlanning(JSON.parse(stored)) : createEmptySprintPlanning()
+  } catch {
+    return createEmptySprintPlanning()
+  }
+}
+
 export function getTaskTotal(task: SprintTask): number {
   return POINT_FIELDS.reduce((total, field) => total + task[field], 0)
 }
