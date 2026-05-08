@@ -9,10 +9,12 @@ import AddDevForm from './components/AddDevForm'
 import DevCard from './components/DevCard'
 import Summary from './components/Summary'
 import SettingsModal from './components/SettingsModal'
-import { Dev, NO_TEAM_VALUE, PointsType, Team, TeamSelection } from './types'
+import SprintPlanning from './components/SprintPlanning'
+import { Dev, NO_TEAM_VALUE, PointsType, SprintPlanningData, Team, TeamSelection } from './types'
 import { normalizeHistoryText } from './lib/utils/history'
 
 type NewDev = { name: string; capacity: string }
+type ActiveTab = 'distribution' | 'sprint'
 
 const LOCAL_DEVS_STORAGE_KEY = 'devscore.localDevs'
 const LOCAL_POINTS_TYPE_STORAGE_KEY = 'devscore.localPointsType'
@@ -99,6 +101,8 @@ function App() {
   const { theme, setTheme } = useTheme()
   const [showSettings, setShowSettings] = useState(false)
   const [showSupabaseWarning, setShowSupabaseWarning] = useState(!supabase)
+  const [activeTab, setActiveTab] = useState<ActiveTab>('distribution')
+  const [isSprintEnabled, setIsSprintEnabled] = useState(false)
 
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState<TeamSelection>(NO_TEAM_VALUE)
@@ -239,6 +243,12 @@ function App() {
     setCustomPointsMap({})
   }, [selectedTeamId])
 
+  useEffect(() => {
+    if (!isSprintEnabled && activeTab === 'sprint') {
+      setActiveTab('distribution')
+    }
+  }, [activeTab, isSprintEnabled])
+
   const addDev = () => {
     const name = newDev.name.trim()
     const capacity = Number(newDev.capacity)
@@ -295,10 +305,30 @@ function App() {
     })
   }
 
+  const distributeSprintTasks = (planning: SprintPlanningData) => {
+    const nextDevs: Dev[] = planning.members
+      .filter(member => member.active && member.name.trim())
+      .map(member => ({
+        idTeam: undefined,
+        name: member.name.trim(),
+        capacity: member.capacity,
+        points: 0,
+        history: [],
+        customPoints: '',
+      }))
+
+    setSelectedTeamId(NO_TEAM_VALUE)
+    setLocalPointsType('hrs')
+    setLocalDevs(nextDevs)
+    setDevs(nextDevs)
+    setCustomPointsMap({})
+    setActiveTab('distribution')
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
-        {showSupabaseWarning && (
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
+        {showSupabaseWarning && activeTab === 'distribution' && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
             Nao foi possivel conectar ao Supabase no momento. Se precisar restaurar a sincronizacao dos times, entre em contato com o mestre Lucas para reiniciar o Supabase.
           </div>
@@ -306,49 +336,86 @@ function App() {
 
         <Header theme={theme} setTheme={setTheme} setShowSettings={setShowSettings} />
 
-        <TeamSelector
-          teams={teams}
-          selectedTeamId={selectedTeamId}
-          setSelectedTeamId={setSelectedTeamId}
-          localPointsType={localPointsType}
-          setLocalPointsType={setLocalPointsType}
-        />
+        {isSprintEnabled && (
+          <div className="flex gap-2 rounded-lg bg-white p-1 shadow dark:bg-gray-800">
+            <button
+              onClick={() => setActiveTab('distribution')}
+              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
+                activeTab === 'distribution'
+                  ? 'bg-green-700 text-white'
+                  : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              Distribuicao
+            </button>
+            <button
+              onClick={() => setActiveTab('sprint')}
+              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
+                activeTab === 'sprint'
+                  ? 'bg-green-700 text-white'
+                  : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              Sprint
+            </button>
+          </div>
+        )}
 
-        <GlobalCapacity
-          globalCapacity={globalCapacity}
-          setGlobalCapacity={setGlobalCapacity}
-          devs={devs}
-          setDevs={setCurrentDevs}
-        />
-
-        <AddDevForm
-          newDev={newDev}
-          setNewDev={setNewDev}
-          addDev={addDev}
-          pointsType={selectedPointsType}
-        />
-
-        <div className="space-y-4">
-          {devs.map((dev, idx) => (
-            <DevCard
-              key={`${selectedTeamId}-${idx}`}
-              dev={dev}
-              index={idx}
-              pointsType={selectedPointsType}
-              updateCapacity={updateCapacity}
-              addPoints={addPoints}
-              customPointsMap={customPointsMap}
-              setCustomPointsMap={setCustomPointsMap}
-              removeDev={removeDev}
-              removeHistoryItem={removeHistoryItem}
+        {activeTab === 'distribution' || !isSprintEnabled ? (
+          <>
+            <TeamSelector
+              teams={teams}
+              selectedTeamId={selectedTeamId}
+              setSelectedTeamId={setSelectedTeamId}
+              localPointsType={localPointsType}
+              setLocalPointsType={setLocalPointsType}
             />
-          ))}
 
-          {!!devs.length && <Summary devs={devs} pointsType={selectedPointsType} />}
-        </div>
+            <GlobalCapacity
+              globalCapacity={globalCapacity}
+              setGlobalCapacity={setGlobalCapacity}
+              devs={devs}
+              setDevs={setCurrentDevs}
+            />
+
+            <AddDevForm
+              newDev={newDev}
+              setNewDev={setNewDev}
+              addDev={addDev}
+              pointsType={selectedPointsType}
+            />
+
+            <div className="space-y-4">
+              {devs.map((dev, idx) => (
+                <DevCard
+                  key={`${selectedTeamId}-${idx}`}
+                  dev={dev}
+                  index={idx}
+                  pointsType={selectedPointsType}
+                  updateCapacity={updateCapacity}
+                  addPoints={addPoints}
+                  customPointsMap={customPointsMap}
+                  setCustomPointsMap={setCustomPointsMap}
+                  removeDev={removeDev}
+                  removeHistoryItem={removeHistoryItem}
+                />
+              ))}
+
+              {!!devs.length && <Summary devs={devs} pointsType={selectedPointsType} />}
+            </div>
+          </>
+        ) : (
+          <SprintPlanning onDistributeTasks={distributeSprintTasks} />
+        )}
       </div>
 
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsModal
+          isSprintEnabled={isSprintEnabled}
+          setIsSprintEnabled={setIsSprintEnabled}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
     </div>
   )
 }
