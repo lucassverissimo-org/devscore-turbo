@@ -121,8 +121,12 @@ function getMemberNameKey(name: string): string {
   return name.trim().toLowerCase()
 }
 
+function hasDistributionLaunch(dev: Dev): boolean {
+  return dev.points !== 0 || dev.history.length > 0
+}
+
 function hasDistributionLaunches(devs: Dev[]): boolean {
-  return devs.some(dev => dev.points !== 0 || dev.history.length > 0)
+  return devs.some(hasDistributionLaunch)
 }
 
 function getDefaultTeamSelection(teams: Team[]): TeamSelection {
@@ -460,37 +464,69 @@ function App() {
   }
 
   const applySprintDistribution = (planning: SprintPlanningData, mode: DistributionSyncMode) => {
-    const existingById = new Map(
-      localDevs.flatMap(dev => (dev.id ? [[dev.id, dev] as const] : []))
-    )
-    const existingByName = new Map(
-      localDevs.map(dev => [getMemberNameKey(dev.name), dev] as const)
-    )
-    const nextDevs: Dev[] = planning.members
-      .filter(member => member.active && member.name.trim())
-      .map(member => {
-        const memberName = member.name.trim()
-        const existing = mode === 'preserve'
-          ? existingById.get(member.id) ?? existingByName.get(getMemberNameKey(memberName))
-          : undefined
+    const activeSprintMembers = planning.members.filter(member => member.active && member.name.trim())
+    const nextDevs: Dev[] = mode === 'preserve'
+      ? (() => {
+          const inactiveSprintMembers = planning.members.filter(member => !member.active && member.name.trim())
+          const inactiveIds = new Set(inactiveSprintMembers.map(member => member.id))
+          const inactiveNames = new Set(inactiveSprintMembers.map(member => getMemberNameKey(member.name)))
+          const preservedDevs = localDevs.filter(dev => {
+            const isInactiveSprintMember =
+              (dev.id && inactiveIds.has(dev.id)) || inactiveNames.has(getMemberNameKey(dev.name))
 
-        return {
-          id: member.id,
-          idTeam: undefined,
-          name: memberName,
-          memberType: member.type,
-          capacity: member.capacity,
-          points: existing?.points ?? 0,
-          history: existing?.history ?? [],
-          customPoints: '',
-        }
-      })
+            return !(isInactiveSprintMember && hasDistributionLaunch(dev))
+          })
+          const existingIds = new Set(preservedDevs.flatMap(dev => (dev.id ? [dev.id] : [])))
+          const existingNames = new Set(preservedDevs.map(dev => getMemberNameKey(dev.name)))
+
+          const newSprintDevs = activeSprintMembers.reduce<Dev[]>((acc, member) => {
+            const memberName = member.name.trim()
+            const memberNameKey = getMemberNameKey(memberName)
+
+            if ((member.id && existingIds.has(member.id)) || existingNames.has(memberNameKey)) {
+              return acc
+            }
+
+            existingIds.add(member.id)
+            existingNames.add(memberNameKey)
+            acc.push({
+              id: member.id,
+              idTeam: undefined,
+              name: memberName,
+              memberType: member.type,
+              capacity: member.capacity,
+              points: 0,
+              history: [],
+              customPoints: '',
+            })
+
+            return acc
+          }, [])
+
+          return [...preservedDevs, ...newSprintDevs]
+        })()
+      : activeSprintMembers.map(member => {
+          const memberName = member.name.trim()
+
+          return {
+            id: member.id,
+            idTeam: undefined,
+            name: memberName,
+            memberType: member.type,
+            capacity: member.capacity,
+            points: 0,
+            history: [],
+            customPoints: '',
+          }
+        })
 
     setSelectedTeamId(NO_TEAM_VALUE)
     setLocalPointsType('hrs')
     setLocalDevs(nextDevs)
     setDevs(nextDevs)
-    setCustomPointsMap({})
+    if (mode === 'replace') {
+      setCustomPointsMap({})
+    }
     setActiveTab('distribution')
   }
 
@@ -682,12 +718,6 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <div className="max-w-7xl mx-auto p-6 space-y-6">
-        {showSupabaseWarning && activeTab === 'distribution' && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
-            Nao foi possivel conectar ao Supabase no momento. Se precisar restaurar a sincronizacao dos times, entre em contato com o mestre Lucas para reiniciar o Supabase.
-          </div>
-        )}
-
         <Header theme={theme} setTheme={setTheme} setShowSettings={setShowSettings} />
 
         {isSprintEnabled && (
@@ -879,7 +909,7 @@ function App() {
                 onClick={() => resolvePendingDistribution('preserve')}
                 className="rounded bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
               >
-                Manter lancamentos e sincronizar membros/capacity
+                Manter lancamentos e adicionar novos membros
               </button>
             </div>
             <button
