@@ -162,6 +162,12 @@ function getAuthErrorMessage(message: string): string {
   return message
 }
 
+function getAuthRedirectUrl(): string | undefined {
+  if (typeof window === 'undefined') return undefined
+
+  return window.location.origin
+}
+
 function App() {
   const { theme, setTheme } = useTheme()
   const [showSettings, setShowSettings] = useState(false)
@@ -743,6 +749,7 @@ function App() {
       email: trimmedEmail,
       password,
       options: {
+        emailRedirectTo: getAuthRedirectUrl(),
         data: {
           full_name: trimmedFullName,
         },
