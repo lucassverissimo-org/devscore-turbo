@@ -166,9 +166,13 @@ function getAuthRedirectUrl(): string | undefined {
   const configuredRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL?.trim()
   if (configuredRedirectUrl) return configuredRedirectUrl.replace(/\/+$/, '')
 
-  if (import.meta.env.PROD || typeof window === 'undefined') return undefined
+  if (typeof window === 'undefined') return undefined
 
-  return window.location.origin
+  const currentOrigin = window.location.origin
+  const currentHost = window.location.hostname
+  const isLocalhost = currentHost === 'localhost' || currentHost === '127.0.0.1'
+
+  return isLocalhost ? undefined : currentOrigin
 }
 
 function App() {
