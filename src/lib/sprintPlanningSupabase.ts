@@ -14,8 +14,15 @@ type SprintPlanningRow = {
   start_date: string | null
   end_date: string | null
   planning_data: unknown
-  distribution_data: unknown
   planning_updated_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+type SprintDistributionRow = {
+  id: string
+  sprint_planning_id: string
+  distribution_data: unknown
   distribution_updated_at: string | null
   created_at: string
   updated_at: string
@@ -30,9 +37,12 @@ function getSupabaseUnavailableResult(): SaveResult {
   return { error: 'Supabase indisponivel.' }
 }
 
-function normalizeRecord(row: SprintPlanningRow): SprintPlanningRecord {
+function normalizeRecord(
+  row: SprintPlanningRow,
+  distributionRow?: SprintDistributionRow | null,
+): SprintPlanningRecord {
   const planningData = normalizeSprintPlanning(row.planning_data)
-  const distributionData = normalizeSprintDistribution(row.distribution_data)
+  const distributionData = normalizeSprintDistribution(distributionRow?.distribution_data)
 
   return {
     id: row.id,
@@ -48,7 +58,7 @@ function normalizeRecord(row: SprintPlanningRow): SprintPlanningRecord {
     },
     distributionData,
     planningUpdatedAt: row.planning_updated_at,
-    distributionUpdatedAt: row.distribution_updated_at,
+    distributionUpdatedAt: distributionRow?.distribution_updated_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -77,6 +87,44 @@ function getPlanningPayload(planning: SprintPlanningData) {
   }
 }
 
+async function getPlanningRow(recordId: string): Promise<{
+  row?: SprintPlanningRow
+  error?: string
+}> {
+  if (!supabase) return { error: 'Supabase indisponivel.' }
+
+  const { data, error } = await supabase
+    .from(TABLE_NAME)
+    .select('*')
+    .eq('id', recordId)
+    .maybeSingle()
+
+  if (error || !data) {
+    return { error: normalizeError(error) }
+  }
+
+  return { row: data as SprintPlanningRow }
+}
+
+async function getDistributionRow(recordId: string): Promise<{
+  row?: SprintDistributionRow | null
+  error?: string
+}> {
+  if (!supabase) return { error: 'Supabase indisponivel.' }
+
+  const { data, error } = await supabase
+    .from('sprint_distributions')
+    .select('*')
+    .eq('sprint_planning_id', recordId)
+    .maybeSingle()
+
+  if (error) {
+    return { error: normalizeError(error) }
+  }
+
+  return { row: data as SprintDistributionRow | null }
+}
+
 export async function listSprintPlanningRecords(project = SPRINT_PROJECT): Promise<{
   records: SprintPlanningRecord[]
   error?: string
@@ -94,7 +142,26 @@ export async function listSprintPlanningRecords(project = SPRINT_PROJECT): Promi
     return { records: [], error: normalizeError(error) }
   }
 
-  return { records: (data as SprintPlanningRow[]).map(normalizeRecord) }
+  const planningRows = data as SprintPlanningRow[]
+  if (!planningRows.length) return { records: [] }
+
+  const planningIds = planningRows.map(row => row.id)
+  const distributionResult = await supabase
+    .from('sprint_distributions')
+    .select('*')
+    .in('sprint_planning_id', planningIds)
+
+  if (distributionResult.error) {
+    return { records: [], error: normalizeError(distributionResult.error) }
+  }
+
+  const distributionsByPlanningId = new Map(
+    ((distributionResult.data ?? []) as SprintDistributionRow[]).map(row => [row.sprint_planning_id, row]),
+  )
+
+  return {
+    records: planningRows.map(row => normalizeRecord(row, distributionsByPlanningId.get(row.id))),
+  }
 }
 
 export async function saveNewSprintPlanningRecord(
@@ -110,8 +177,6 @@ export async function saveNewSprintPlanningRecord(
     .insert({
       project,
       ...getPlanningPayload(planning),
-      distribution_data: distribution,
-      distribution_updated_at: now,
       planning_updated_at: now,
     })
     .select('*')
@@ -121,7 +186,25 @@ export async function saveNewSprintPlanningRecord(
     return { error: normalizeError(error) }
   }
 
-  return { record: normalizeRecord(data as SprintPlanningRow) }
+  const planningRow = data as SprintPlanningRow
+  const distributionResult = await supabase
+    .from('sprint_distributions')
+    .upsert(
+      {
+        sprint_planning_id: planningRow.id,
+        distribution_data: distribution,
+        distribution_updated_at: now,
+      },
+      { onConflict: 'sprint_planning_id' },
+    )
+    .select('*')
+    .single()
+
+  if (distributionResult.error || !distributionResult.data) {
+    return { error: normalizeError(distributionResult.error) }
+  }
+
+  return { record: normalizeRecord(planningRow, distributionResult.data as SprintDistributionRow) }
 }
 
 export async function updateSprintPlanningRecord(
@@ -151,7 +234,12 @@ export async function updateSprintPlanningRecord(
     return { conflict: true }
   }
 
-  return { record: normalizeRecord(rows[0]) }
+  const distributionResult = await getDistributionRow(recordId)
+  if (distributionResult.error) {
+    return { error: distributionResult.error }
+  }
+
+  return { record: normalizeRecord(rows[0], distributionResult.row) }
 }
 
 export async function updateSprintDistributionRecord(
@@ -161,13 +249,14 @@ export async function updateSprintDistributionRecord(
 ): Promise<SaveResult> {
   if (!supabase) return getSupabaseUnavailableResult()
 
+  const now = new Date().toISOString()
   let query = supabase
-    .from(TABLE_NAME)
+    .from('sprint_distributions')
     .update({
       distribution_data: distribution,
-      distribution_updated_at: new Date().toISOString(),
+      distribution_updated_at: now,
     })
-    .eq('id', recordId)
+    .eq('sprint_planning_id', recordId)
 
   query = expectedDistributionUpdatedAt
     ? query.eq('distribution_updated_at', expectedDistributionUpdatedAt)
@@ -179,10 +268,49 @@ export async function updateSprintDistributionRecord(
     return { error: normalizeError(error) }
   }
 
-  const rows = (data ?? []) as SprintPlanningRow[]
+  const rows = (data ?? []) as SprintDistributionRow[]
   if (!rows.length) {
-    return { conflict: true }
+    if (expectedDistributionUpdatedAt) {
+      return { conflict: true }
+    }
+
+    const currentDistributionResult = await getDistributionRow(recordId)
+    if (currentDistributionResult.error) {
+      return { error: currentDistributionResult.error }
+    }
+
+    if (currentDistributionResult.row) {
+      return { conflict: true }
+    }
+
+    const insertResult = await supabase
+      .from('sprint_distributions')
+      .insert({
+        sprint_planning_id: recordId,
+        distribution_data: distribution,
+        distribution_updated_at: now,
+      })
+      .select('*')
+      .single()
+
+    if (insertResult.error || !insertResult.data) {
+      return { error: normalizeError(insertResult.error) }
+    }
+
+    const planningResult = await getPlanningRow(recordId)
+    if (planningResult.error || !planningResult.row) {
+      return { error: planningResult.error ?? 'Nao foi possivel carregar a Sprint.' }
+    }
+
+    return {
+      record: normalizeRecord(planningResult.row, insertResult.data as SprintDistributionRow),
+    }
   }
 
-  return { record: normalizeRecord(rows[0]) }
+  const planningResult = await getPlanningRow(recordId)
+  if (planningResult.error || !planningResult.row) {
+    return { error: planningResult.error ?? 'Nao foi possivel carregar a Sprint.' }
+  }
+
+  return { record: normalizeRecord(planningResult.row, rows[0]) }
 }

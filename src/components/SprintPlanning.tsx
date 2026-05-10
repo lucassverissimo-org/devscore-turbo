@@ -38,6 +38,7 @@ type SprintPlanningProps = {
   isSavingPlanning: boolean
   savePlanningMessage: string
   hasPlanningChanges: boolean
+  canEditPlanning: boolean
 }
 
 const emptyMemberForm: NewMemberForm = { name: '', type: 'dev', capacity: '' }
@@ -101,6 +102,7 @@ export default function SprintPlanning({
   isSavingPlanning,
   savePlanningMessage,
   hasPlanningChanges,
+  canEditPlanning,
 }: SprintPlanningProps) {
   const [newMember, setNewMember] = React.useState<NewMemberForm>(emptyMemberForm)
   const [newTask, setNewTask] = React.useState<NewTaskForm>(emptyTaskForm)
@@ -111,6 +113,7 @@ export default function SprintPlanning({
   const summary = React.useMemo(() => getSprintSummary(planning), [planning])
 
   const updatePlanning = (updater: (current: SprintPlanningData) => SprintPlanningData) => {
+    if (!canEditPlanning) return
     setPlanning(current => updater(current))
   }
 
@@ -261,6 +264,7 @@ export default function SprintPlanning({
 
   const canExport = planning.members.length > 0 || planning.tasks.length > 0
   const canDistribute = planning.members.some(member => member.active && member.name.trim())
+  const cannotEditMessage = 'Somente ADMIN ou SCRUM pode alterar dados da guia Sprint.'
   const balanceClass = summary.balance < 0
     ? 'text-red-700 dark:text-red-300'
     : 'text-green-700 dark:text-green-300'
@@ -276,6 +280,7 @@ export default function SprintPlanning({
                 placeholder="BRAVO - Planning Sprint 128"
                 value={planning.sprintName}
                 onChange={e => updatePlanning(current => ({ ...current, sprintName: e.target.value }))}
+                disabled={!canEditPlanning}
                 className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
               />
             </label>
@@ -285,6 +290,7 @@ export default function SprintPlanning({
                 type="date"
                 value={planning.startDate}
                 onChange={e => updatePlanning(current => ({ ...current, startDate: e.target.value }))}
+                disabled={!canEditPlanning}
                 className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
               />
             </label>
@@ -294,6 +300,7 @@ export default function SprintPlanning({
                 type="date"
                 value={planning.endDate}
                 onChange={e => updatePlanning(current => ({ ...current, endDate: e.target.value }))}
+                disabled={!canEditPlanning}
                 className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
               />
             </label>
@@ -301,7 +308,7 @@ export default function SprintPlanning({
           <div className="flex flex-wrap gap-2">
             <button
               onClick={onSavePlanning}
-              disabled={isSavingPlanning || !planning.sprintName.trim()}
+              disabled={!canEditPlanning || isSavingPlanning || !planning.sprintName.trim()}
               className="inline-flex items-center gap-2 bg-blue-500 text-white px-3 py-2 rounded hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSavingPlanning ? 'Salvando' : hasPlanningChanges ? 'Salvar' : 'Salvar'}
@@ -330,6 +337,9 @@ export default function SprintPlanning({
         )}
         {savePlanningMessage && (
           <p className="text-sm text-gray-600 dark:text-gray-300">{savePlanningMessage}</p>
+        )}
+        {!canEditPlanning && (
+          <p className="text-sm text-amber-700 dark:text-amber-300">{cannotEditMessage}</p>
         )}
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -404,7 +414,7 @@ export default function SprintPlanning({
           </button>
           <button
             onClick={clearMembers}
-            disabled={!planning.members.length}
+            disabled={!canEditPlanning || !planning.members.length}
             className="inline-flex items-center gap-2 rounded bg-gray-100 px-3 py-2 text-sm text-gray-800 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
           >
             <RotateCcw size={16} />
@@ -419,11 +429,13 @@ export default function SprintPlanning({
             placeholder="Nome do membro"
             value={newMember.name}
             onChange={e => setNewMember(current => ({ ...current, name: e.target.value }))}
+            disabled={!canEditPlanning}
             className="border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
           />
           <select
             value={newMember.type}
             onChange={e => setNewMember(current => ({ ...current, type: e.target.value as SprintMemberType }))}
+            disabled={!canEditPlanning}
             className={`border p-2 rounded ${getSprintMemberTypeBadgeClass(newMember.type)}`}
           >
             {SPRINT_MEMBER_TYPES.map(type => (
@@ -437,11 +449,13 @@ export default function SprintPlanning({
             placeholder="Capacity"
             value={newMember.capacity}
             onChange={e => setNewMember(current => ({ ...current, capacity: e.target.value }))}
+            disabled={!canEditPlanning}
             className="border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
           />
           <button
             onClick={addMember}
-            className="inline-flex items-center justify-center gap-2 bg-blue-500 text-white px-3 py-2 rounded hover:bg-blue-600"
+            disabled={!canEditPlanning}
+            className="inline-flex items-center justify-center gap-2 bg-blue-500 text-white px-3 py-2 rounded hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus size={18} />
             Adicionar
@@ -463,6 +477,7 @@ export default function SprintPlanning({
                       type="checkbox"
                       checked={member.active}
                       onChange={e => updateMember(member.id, 'active', e.target.checked)}
+                      disabled={!canEditPlanning}
                       className="h-4 w-4 rounded border-gray-300 text-green-700 focus:ring-green-700"
                     />
                     <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
@@ -475,6 +490,7 @@ export default function SprintPlanning({
                   <input
                     value={member.name}
                     onChange={e => updateMember(member.id, 'name', e.target.value)}
+                    disabled={!canEditPlanning}
                     className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
                   />
                 </label>
@@ -483,6 +499,7 @@ export default function SprintPlanning({
                   <select
                     value={member.type}
                     onChange={e => updateMember(member.id, 'type', e.target.value)}
+                    disabled={!canEditPlanning}
                     className={`h-10 w-full rounded border p-2 ${getSprintMemberTypeBadgeClass(member.type)}`}
                   >
                     {SPRINT_MEMBER_TYPES.map(type => (
@@ -498,6 +515,7 @@ export default function SprintPlanning({
                     step="0.5"
                     value={getInputNumberValue(member.capacity)}
                     onChange={e => updateMember(member.id, 'capacity', e.target.value)}
+                    disabled={!canEditPlanning}
                     className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
                   />
                 </label>
@@ -507,6 +525,7 @@ export default function SprintPlanning({
                     value={member.observation}
                     onChange={e => updateMember(member.id, 'observation', e.target.value)}
                     placeholder="Ferias, atestado..."
+                    disabled={!canEditPlanning}
                     className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
                   />
                 </label>
@@ -516,6 +535,7 @@ export default function SprintPlanning({
                     type="date"
                     value={member.observationStartDate}
                     onChange={e => updateMember(member.id, 'observationStartDate', e.target.value)}
+                    disabled={!canEditPlanning}
                     className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
                   />
                 </label>
@@ -525,12 +545,14 @@ export default function SprintPlanning({
                     type="date"
                     value={member.observationEndDate}
                     onChange={e => updateMember(member.id, 'observationEndDate', e.target.value)}
+                    disabled={!canEditPlanning}
                     className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
                   />
                 </label>
                 <button
                   onClick={() => removeMember(member.id)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40"
+                  disabled={!canEditPlanning}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded text-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-red-950/40"
                   title="Remover membro"
                 >
                   <Trash2 size={18} />
@@ -556,7 +578,7 @@ export default function SprintPlanning({
           </div>
           <button
             onClick={clearTasks}
-            disabled={!planning.tasks.length}
+            disabled={!canEditPlanning || !planning.tasks.length}
             className="inline-flex items-center gap-2 rounded bg-gray-100 px-3 py-2 text-sm text-gray-800 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
           >
             <RotateCcw size={16} />
@@ -572,6 +594,7 @@ export default function SprintPlanning({
                 placeholder="SQCRM-0000"
                 value={newTask.code}
                 onChange={e => setNewTask(current => ({ ...current, code: e.target.value }))}
+                disabled={!canEditPlanning}
                 className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
               />
             </label>
@@ -581,6 +604,7 @@ export default function SprintPlanning({
                 placeholder="Descricao"
                 value={newTask.description}
                 onChange={e => setNewTask(current => ({ ...current, description: e.target.value }))}
+                disabled={!canEditPlanning}
                 className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
               />
             </label>
@@ -594,13 +618,15 @@ export default function SprintPlanning({
                   placeholder={placeholder}
                   value={newTask[field]}
                   onChange={e => setNewTask(current => ({ ...current, [field]: e.target.value }))}
+                  disabled={!canEditPlanning}
                   className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600 lg:px-1.5"
                 />
               </label>
             ))}
             <button
               onClick={addTask}
-              className="inline-flex h-10 items-center justify-center gap-2 bg-blue-500 text-white px-3 rounded hover:bg-blue-600 sm:col-span-2 lg:col-span-1"
+              disabled={!canEditPlanning}
+              className="inline-flex h-10 items-center justify-center gap-2 bg-blue-500 text-white px-3 rounded hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2 lg:col-span-1"
             >
               <Plus size={18} />
               Adicionar
@@ -619,6 +645,7 @@ export default function SprintPlanning({
                       type="checkbox"
                       checked={task.active}
                       onChange={e => updateTask(task.id, 'active', e.target.checked)}
+                      disabled={!canEditPlanning}
                       className="h-4 w-4 rounded border-gray-300 text-green-700 focus:ring-green-700"
                     />
                     <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
@@ -631,6 +658,7 @@ export default function SprintPlanning({
                   <input
                     value={task.code}
                     onChange={e => updateTask(task.id, 'code', e.target.value)}
+                    disabled={!canEditPlanning}
                     className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
                   />
                 </label>
@@ -639,6 +667,7 @@ export default function SprintPlanning({
                   <input
                     value={task.description}
                     onChange={e => updateTask(task.id, 'description', e.target.value)}
+                    disabled={!canEditPlanning}
                     className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
                   />
                 </label>
@@ -651,6 +680,7 @@ export default function SprintPlanning({
                       step="0.5"
                       value={getInputNumberValue(task[field])}
                       onChange={e => updateTask(task.id, field, e.target.value)}
+                      disabled={!canEditPlanning}
                       className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600 lg:px-1.5"
                     />
                   </label>
@@ -663,7 +693,8 @@ export default function SprintPlanning({
                 </div>
                 <button
                   onClick={() => removeTask(task.id)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40"
+                  disabled={!canEditPlanning}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded text-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-red-950/40"
                   title="Remover estoria"
                 >
                   <Trash2 size={18} />

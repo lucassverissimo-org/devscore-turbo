@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
+import type { User } from '@supabase/supabase-js'
 import { useTheme } from './ThemeProvider'
 import { supabase } from './lib/supabase'
 
+import AuthPanel from './components/AuthPanel'
 import Header from './components/Header'
 import TeamSelector from './components/TeamSelector'
 import AddDevForm from './components/AddDevForm'
@@ -9,7 +11,7 @@ import DevCard from './components/DevCard'
 import Summary from './components/Summary'
 import SettingsModal from './components/SettingsModal'
 import SprintPlanning from './components/SprintPlanning'
-import { Dev, NO_TEAM_VALUE, PointsType, SprintDistributionData, SprintPlanningData, SprintPlanningRecord, Team, TeamSelection } from './types'
+import { Dev, NO_TEAM_VALUE, PointsType, SprintDistributionData, SprintPlanningData, SprintPlanningRecord, Team, TeamSelection, UserProfile } from './types'
 import {
   SPRINT_PROJECT,
   listSprintPlanningRecords,
@@ -17,6 +19,7 @@ import {
   updateSprintDistributionRecord,
   updateSprintPlanningRecord,
 } from './lib/sprintPlanningSupabase'
+import { canEditSprintPlanning, getCurrentUserProfile } from './lib/userProfilesSupabase'
 import { normalizeHistoryText } from './lib/utils/history'
 import {
   SPRINT_PLANNING_STORAGE_KEY,
@@ -143,9 +146,26 @@ function getDefaultTeamSelection(teams: Team[]): TeamSelection {
   return NO_TEAM_VALUE
 }
 
+function getUserMetadataName(user: User | null): string {
+  return typeof user?.user_metadata?.full_name === 'string'
+    ? user.user_metadata.full_name
+    : typeof user?.user_metadata?.name === 'string'
+      ? user.user_metadata.name
+      : ''
+}
+
+function getAuthErrorMessage(message: string): string {
+  if (message.toLowerCase().includes('email rate limit exceeded')) {
+    return 'Limite temporario de envio de email atingido no Supabase. Aguarde alguns minutos antes de tentar novamente.'
+  }
+
+  return message
+}
+
 function App() {
   const { theme, setTheme } = useTheme()
   const [showSettings, setShowSettings] = useState(false)
+  const [showAuthPanel, setShowAuthPanel] = useState(false)
   const [showSupabaseWarning, setShowSupabaseWarning] = useState(!supabase)
   const [activeTab, setActiveTab] = useState<ActiveTab>('distribution')
   const [isSprintEnabled, setIsSprintEnabled] = useState(false)
@@ -165,6 +185,10 @@ function App() {
   const [sprintMessage, setSprintMessage] = useState('')
   const [planningSaveMessage, setPlanningSaveMessage] = useState('')
   const [distributionSaveMessage, setDistributionSaveMessage] = useState('')
+  const [authUser, setAuthUser] = useState<User | null>(null)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false)
+  const [authMessage, setAuthMessage] = useState('')
   const [pendingDistributionPlanning, setPendingDistributionPlanning] = useState<SprintPlanningData | null>(null)
   const [planningSnapshot, setPlanningSnapshot] = useState(() => JSON.stringify(loadStoredSprintPlanning()))
   const [distributionSnapshot, setDistributionSnapshot] = useState(() => {
@@ -193,6 +217,11 @@ function App() {
   const hasPlanningChanges = JSON.stringify(sprintPlanning) !== planningSnapshot
   const hasDistributionChanges = JSON.stringify(distributionData) !== distributionSnapshot
   const shouldUseLocalDistribution = isSprintEnabled || isWithoutTeam
+  const currentUserRole = userProfile?.role ?? (authUser ? 'USER' : null)
+  const hasSprintPlanningWriteAccess = !supabase || canEditSprintPlanning(currentUserRole)
+  const authDisplayName = authUser
+    ? userProfile?.fullName.trim() || getUserMetadataName(authUser) || authUser.email || ''
+    : ''
 
   const setCurrentDevs: React.Dispatch<React.SetStateAction<Dev[]>> = value => {
     const nextDevs =
@@ -269,6 +298,60 @@ function App() {
 
     return window.confirm('Existem alteracoes nao salvas na sprint atual. Deseja descartar essas alteracoes?')
   }
+
+  const loadAuthenticatedProfile = React.useCallback(async (user: User | null) => {
+    if (!supabase || !user) {
+      setUserProfile(null)
+      setIsLoadingProfile(false)
+      return
+    }
+
+    setIsLoadingProfile(true)
+    const result = await getCurrentUserProfile(user)
+    setIsLoadingProfile(false)
+    setUserProfile(result.profile)
+
+    if (result.error) {
+      setAuthMessage(`Nao foi possivel carregar o perfil: ${result.error}`)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!supabase) {
+      setAuthUser(null)
+      setUserProfile(null)
+      setIsLoadingProfile(false)
+      return
+    }
+
+    let ignore = false
+
+    ;(async () => {
+      const { data, error } = await supabase.auth.getSession()
+
+      if (ignore) return
+
+      if (error) {
+        setAuthMessage(`Nao foi possivel carregar o login: ${error.message}`)
+        return
+      }
+
+      const user = data.session?.user ?? null
+      setAuthUser(user)
+      await loadAuthenticatedProfile(user)
+    })()
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user ?? null
+      setAuthUser(user)
+      void loadAuthenticatedProfile(user)
+    })
+
+    return () => {
+      ignore = true
+      authListener.subscription.unsubscribe()
+    }
+  }, [loadAuthenticatedProfile])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -555,6 +638,12 @@ function App() {
   }
 
   const createNewSprintDraft = () => {
+    if (!hasSprintPlanningWriteAccess) {
+      setSprintMessage('Somente ADMIN ou SCRUM pode criar sprints.')
+      setActiveTab('sprint')
+      return
+    }
+
     if (!confirmDiscardSprintChanges()) return
 
     const emptyDistribution = createEmptySprintDistribution()
@@ -575,6 +664,12 @@ function App() {
 
   const cloneSprintDraft = () => {
     if (!selectedSprintRecord && !sprintPlanning.sprintName.trim()) return
+    if (!hasSprintPlanningWriteAccess) {
+      setSprintMessage('Somente ADMIN ou SCRUM pode criar ou clonar sprints.')
+      setActiveTab('sprint')
+      return
+    }
+
     if (!confirmDiscardSprintChanges()) return
 
     const sourcePlanning = selectedSprintRecord?.planningData ?? sprintPlanning
@@ -611,7 +706,79 @@ function App() {
     setActiveTab('sprint')
   }
 
+  const signIn = async (email: string, password: string) => {
+    if (!supabase) {
+      setAuthMessage('Supabase indisponivel.')
+      return
+    }
+
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail || !password) {
+      setAuthMessage('Informe email e senha.')
+      return
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: trimmedEmail,
+      password,
+    })
+
+    setAuthMessage(error ? `Nao foi possivel entrar: ${getAuthErrorMessage(error.message)}` : 'Login realizado.')
+  }
+
+  const signUp = async (email: string, password: string, fullName: string) => {
+    if (!supabase) {
+      setAuthMessage('Supabase indisponivel.')
+      return
+    }
+
+    const trimmedEmail = email.trim()
+    const trimmedFullName = fullName.trim()
+    if (!trimmedFullName || !trimmedEmail || !password) {
+      setAuthMessage('Informe nome, email e senha.')
+      return
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email: trimmedEmail,
+      password,
+      options: {
+        data: {
+          full_name: trimmedFullName,
+        },
+      },
+    })
+
+    if (error) {
+      setAuthMessage(`Nao foi possivel criar a conta: ${getAuthErrorMessage(error.message)}`)
+      return
+    }
+
+    setAuthMessage(
+      data.session
+        ? 'Conta criada. Perfil inicial USER.'
+        : 'Conta criada. Confirme o email antes de entrar.',
+    )
+  }
+
+  const signOut = async () => {
+    if (!supabase) return
+
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      setAuthMessage(`Nao foi possivel sair: ${error.message}`)
+      return
+    }
+
+    setAuthMessage('Logout realizado.')
+  }
+
   const savePlanning = async () => {
+    if (!hasSprintPlanningWriteAccess) {
+      setPlanningSaveMessage('Somente ADMIN ou SCRUM pode salvar dados da guia Sprint.')
+      return
+    }
+
     const sprintName = sprintPlanning.sprintName.trim()
 
     if (!sprintName) {
@@ -718,7 +885,34 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <div className="max-w-7xl mx-auto p-6 space-y-6">
-        <Header theme={theme} setTheme={setTheme} setShowSettings={setShowSettings} />
+        <Header
+          theme={theme}
+          setTheme={setTheme}
+          setShowSettings={setShowSettings}
+          showAuthPanel={showAuthPanel}
+          setShowAuthPanel={setShowAuthPanel}
+          authDisplayName={authDisplayName}
+          authRole={currentUserRole ? `Perfil ${currentUserRole}` : ''}
+          authMenu={
+            supabase ? (
+              <AuthPanel
+                userEmail={authUser?.email ?? ''}
+                userName={userProfile?.fullName ?? ''}
+                role={currentUserRole}
+                canEditSprintPlanning={hasSprintPlanningWriteAccess}
+                isLoadingProfile={isLoadingProfile}
+                message={authMessage}
+                onSignIn={signIn}
+                onSignUp={signUp}
+                onSignOut={signOut}
+              />
+            ) : (
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Supabase indisponivel. Login desativado neste ambiente.
+              </p>
+            )
+          }
+        />
 
         {isSprintEnabled && (
           <>
@@ -757,13 +951,14 @@ function App() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={createNewSprintDraft}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded bg-blue-500 px-3 text-white hover:bg-blue-600"
+                    disabled={!hasSprintPlanningWriteAccess}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded bg-blue-500 px-3 text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Nova Sprint
                   </button>
                   <button
                     onClick={cloneSprintDraft}
-                    disabled={!selectedSprintRecord && !sprintPlanning.sprintName.trim()}
+                    disabled={!hasSprintPlanningWriteAccess || (!selectedSprintRecord && !sprintPlanning.sprintName.trim())}
                     className="inline-flex h-10 items-center justify-center rounded bg-gray-100 px-3 text-gray-800 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
                   >
                     Clonar Sprint
@@ -879,6 +1074,7 @@ function App() {
             isSavingPlanning={isSavingPlanning}
             savePlanningMessage={planningSaveMessage}
             hasPlanningChanges={hasPlanningChanges || !selectedSprintRecord}
+            canEditPlanning={hasSprintPlanningWriteAccess}
           />
         )}
       </div>
