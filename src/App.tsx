@@ -163,7 +163,10 @@ function getAuthErrorMessage(message: string): string {
 }
 
 function getAuthRedirectUrl(): string | undefined {
-  if (typeof window === 'undefined') return undefined
+  const configuredRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL?.trim()
+  if (configuredRedirectUrl) return configuredRedirectUrl.replace(/\/+$/, '')
+
+  if (import.meta.env.PROD || typeof window === 'undefined') return undefined
 
   return window.location.origin
 }
