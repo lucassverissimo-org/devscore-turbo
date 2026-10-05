@@ -1,0 +1,16 @@
+project_id = "devscore-turbo"
+
+[functions.jira-oauth-start]
+verify_jwt = true
+
+[functions.jira-oauth-callback]
+verify_jwt = false
+
+[functions.jira-connection-status]
+verify_jwt = true
+
+[functions.jira-disconnect]
+verify_jwt = true
+
+[functions.jira-import-sprint]
+verify_jwt = true

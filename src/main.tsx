@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App'
+import ToolHub from './ToolHub'
 import './index.css'
 import { ThemeProvider } from './ThemeProvider'
 
@@ -10,7 +10,7 @@ if (rootElement) {
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
       <ThemeProvider>
-        <App />
+        <ToolHub />
       </ThemeProvider>
     </React.StrictMode>
   )
