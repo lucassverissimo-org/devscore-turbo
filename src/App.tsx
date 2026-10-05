@@ -11,7 +11,20 @@ import DevCard from './components/DevCard'
 import Summary from './components/Summary'
 import SettingsModal from './components/SettingsModal'
 import SprintPlanning from './components/SprintPlanning'
-import { Dev, NO_TEAM_VALUE, PointsType, SprintDistributionData, SprintPlanningData, SprintPlanningRecord, Team, TeamSelection, UserProfile } from './types'
+import {
+  Dev,
+  JiraConnectionStatus,
+  JiraSprintImportParams,
+  JiraSprintIssue,
+  NO_TEAM_VALUE,
+  PointsType,
+  SprintDistributionData,
+  SprintPlanningData,
+  SprintPlanningRecord,
+  Team,
+  TeamSelection,
+  UserProfile,
+} from './types'
 import {
   SPRINT_PROJECT,
   listSprintPlanningRecords,
@@ -19,6 +32,12 @@ import {
   updateSprintDistributionRecord,
   updateSprintPlanningRecord,
 } from './lib/sprintPlanningSupabase'
+import {
+  disconnectJira,
+  getJiraConnectionStatus,
+  importJiraSprint,
+  startJiraOAuthConnection,
+} from './lib/jiraSupabase'
 import { canEditSprintPlanning, getCurrentUserProfile } from './lib/userProfilesSupabase'
 import { normalizeHistoryText } from './lib/utils/history'
 import {
@@ -120,6 +139,58 @@ function createId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
+function mergeJiraSprintIssues(planning: SprintPlanningData, issues: JiraSprintIssue[]): {
+  planning: SprintPlanningData
+  added: number
+  updated: number
+} {
+  const tasks = [...planning.tasks]
+  const taskIndexByCode = new Map(tasks.map((task, index) => [task.code.trim().toUpperCase(), index]))
+  let added = 0
+  let updated = 0
+
+  issues.forEach(issue => {
+    const code = issue.key.trim().toUpperCase()
+    if (!code) return
+
+    const existingIndex = taskIndexByCode.get(code)
+    if (typeof existingIndex === 'number') {
+      const currentTask = tasks[existingIndex]
+      const nextDescription = issue.summary.trim() || currentTask.description
+
+      if (nextDescription !== currentTask.description) {
+        tasks[existingIndex] = {
+          ...currentTask,
+          description: nextDescription,
+        }
+        updated += 1
+      }
+      return
+    }
+
+    taskIndexByCode.set(code, tasks.length)
+    tasks.push({
+      id: createId(),
+      active: true,
+      code,
+      description: issue.summary.trim(),
+      arqPoints: 0,
+      funcPoints: 0,
+      devPoints: typeof issue.storyPoints === 'number' ? issue.storyPoints : 0,
+    })
+    added += 1
+  })
+
+  return {
+    planning: {
+      ...planning,
+      tasks,
+    },
+    added,
+    updated,
+  }
+}
+
 function getMemberNameKey(name: string): string {
   return name.trim().toLowerCase()
 }
@@ -179,7 +250,7 @@ function App() {
   const { theme, setTheme } = useTheme()
   const [showSettings, setShowSettings] = useState(false)
   const [showAuthPanel, setShowAuthPanel] = useState(false)
-  const [showSupabaseWarning, setShowSupabaseWarning] = useState(!supabase)
+  const [, setShowSupabaseWarning] = useState(!supabase)
   const [activeTab, setActiveTab] = useState<ActiveTab>('distribution')
   const [isSprintEnabled, setIsSprintEnabled] = useState(false)
 
@@ -202,6 +273,12 @@ function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [isLoadingProfile, setIsLoadingProfile] = useState(false)
   const [authMessage, setAuthMessage] = useState('')
+  const [jiraConnection, setJiraConnection] = useState<JiraConnectionStatus | null>(null)
+  const [jiraMessage, setJiraMessage] = useState('')
+  const [isLoadingJiraConnection, setIsLoadingJiraConnection] = useState(false)
+  const [isConnectingJira, setIsConnectingJira] = useState(false)
+  const [isDisconnectingJira, setIsDisconnectingJira] = useState(false)
+  const [isImportingJiraSprint, setIsImportingJiraSprint] = useState(false)
   const [pendingDistributionPlanning, setPendingDistributionPlanning] = useState<SprintPlanningData | null>(null)
   const [planningSnapshot, setPlanningSnapshot] = useState(() => JSON.stringify(loadStoredSprintPlanning()))
   const [distributionSnapshot, setDistributionSnapshot] = useState(() => {
@@ -329,6 +406,29 @@ function App() {
     }
   }, [])
 
+  const refreshJiraConnectionStatus = React.useCallback(async (showMessage = false) => {
+    if (!supabase || !authUser || !canEditSprintPlanning(currentUserRole)) {
+      setJiraConnection(null)
+      setIsLoadingJiraConnection(false)
+      return
+    }
+
+    setIsLoadingJiraConnection(true)
+    const result = await getJiraConnectionStatus()
+    setIsLoadingJiraConnection(false)
+
+    if (result.error) {
+      setJiraConnection(null)
+      setJiraMessage(`Nao foi possivel carregar o Jira: ${result.error}`)
+      return
+    }
+
+    setJiraConnection(result.status)
+    if (showMessage) {
+      setJiraMessage(result.status?.connected ? 'Jira conectado.' : 'Jira desconectado.')
+    }
+  }, [authUser, currentUserRole])
+
   useEffect(() => {
     if (!supabase) {
       setAuthUser(null)
@@ -365,6 +465,34 @@ function App() {
       authListener.subscription.unsubscribe()
     }
   }, [loadAuthenticatedProfile])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const url = new URL(window.location.href)
+    const jiraStatus = url.searchParams.get('jira')
+    if (!jiraStatus) return
+
+    const jiraStatusMessage = url.searchParams.get('jira_message')
+    setJiraMessage(
+      jiraStatus === 'connected'
+        ? jiraStatusMessage || 'Jira conectado.'
+        : jiraStatusMessage || 'Nao foi possivel conectar o Jira.',
+    )
+
+    url.searchParams.delete('jira')
+    url.searchParams.delete('jira_message')
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`)
+  }, [])
+
+  useEffect(() => {
+    if (!isSprintEnabled || !authUser || !canEditSprintPlanning(currentUserRole)) {
+      setJiraConnection(null)
+      return
+    }
+
+    void refreshJiraConnectionStatus(false)
+  }, [authUser, currentUserRole, isSprintEnabled, refreshJiraConnectionStatus])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -719,6 +847,83 @@ function App() {
     setActiveTab('sprint')
   }
 
+  const connectJira = async () => {
+    if (!supabase || !authUser) {
+      setJiraMessage('Entre no DevScore antes de conectar o Jira.')
+      return
+    }
+
+    if (!canEditSprintPlanning(currentUserRole)) {
+      setJiraMessage('Somente ADMIN ou SCRUM pode conectar o Jira.')
+      return
+    }
+
+    setIsConnectingJira(true)
+    setJiraMessage('')
+
+    const result = await startJiraOAuthConnection(window.location.href)
+    if (result.error || !result.authorizationUrl) {
+      setIsConnectingJira(false)
+      setJiraMessage(result.error ?? 'Nao foi possivel iniciar a conexao com Jira.')
+      return
+    }
+
+    window.location.assign(result.authorizationUrl)
+  }
+
+  const disconnectCurrentJira = async () => {
+    if (!jiraConnection?.connected) return
+    const confirmed = window.confirm('Desconectar sua conta Jira do DevScore?')
+    if (!confirmed) return
+
+    setIsDisconnectingJira(true)
+    setJiraMessage('')
+    const result = await disconnectJira()
+    setIsDisconnectingJira(false)
+
+    if (result.error) {
+      setJiraMessage(result.error)
+      return
+    }
+
+    setJiraConnection({ connected: false })
+    setJiraMessage('Jira desconectado.')
+  }
+
+  const importSprintFromJira = async (params: JiraSprintImportParams) => {
+    if (!hasSprintPlanningWriteAccess) {
+      setJiraMessage('Somente ADMIN ou SCRUM pode importar estorias do Jira.')
+      return
+    }
+
+    if (!jiraConnection?.connected) {
+      setJiraMessage('Conecte o Jira antes de importar a sprint.')
+      return
+    }
+
+    setIsImportingJiraSprint(true)
+    setJiraMessage('')
+
+    const result = await importJiraSprint(params)
+    setIsImportingJiraSprint(false)
+
+    if (result.error || !result.result) {
+      setJiraMessage(result.error ?? 'Nao foi possivel importar a sprint do Jira.')
+      return
+    }
+
+    const basePlanning = !sprintPlanning.sprintName.trim() && result.result.sprint.name
+      ? { ...sprintPlanning, sprintName: result.result.sprint.name }
+      : sprintPlanning
+    const merged = mergeJiraSprintIssues(basePlanning, result.result.issues)
+    setSprintPlanning(merged.planning)
+
+    const sourceText = result.result.source === 'cache' ? 'cache' : 'Jira'
+    setJiraMessage(
+      `Importacao via ${sourceText}: ${merged.added} estorias adicionadas, ${merged.updated} atualizadas.`,
+    )
+  }
+
   const signIn = async (email: string, password: string) => {
     if (!supabase) {
       setAuthMessage('Supabase indisponivel.')
@@ -784,6 +989,8 @@ function App() {
       return
     }
 
+    setJiraConnection(null)
+    setJiraMessage('')
     setAuthMessage('Logout realizado.')
   }
 
@@ -1089,6 +1296,16 @@ function App() {
             savePlanningMessage={planningSaveMessage}
             hasPlanningChanges={hasPlanningChanges || !selectedSprintRecord}
             canEditPlanning={hasSprintPlanningWriteAccess}
+            jiraConnection={jiraConnection}
+            jiraMessage={jiraMessage}
+            isLoadingJiraConnection={isLoadingJiraConnection}
+            isConnectingJira={isConnectingJira}
+            isDisconnectingJira={isDisconnectingJira}
+            isImportingJiraSprint={isImportingJiraSprint}
+            onConnectJira={connectJira}
+            onRefreshJiraConnection={() => refreshJiraConnectionStatus(true)}
+            onDisconnectJira={disconnectCurrentJira}
+            onImportJiraSprint={importSprintFromJira}
           />
         )}
       </div>

@@ -1,6 +1,28 @@
 import React from 'react'
-import { ChevronDown, ChevronRight, Download, ListPlus, Plus, RotateCcw, Shuffle, Trash2, Users } from 'lucide-react'
-import { SprintDistributionData, SprintMemberType, SprintPlanningData, SprintTask } from '../types'
+import {
+  ChevronDown,
+  ChevronRight,
+  Cloud,
+  Download,
+  Link2,
+  ListPlus,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Shuffle,
+  Trash2,
+  Unlink,
+  Users,
+} from 'lucide-react'
+import {
+  JiraConnectionStatus,
+  JiraSprintImportParams,
+  SprintDistributionData,
+  SprintMemberType,
+  SprintPlanningData,
+  SprintTask,
+} from '../types'
 import { exportSprintPlanningXlsx } from '../lib/utils/exportSprintPlanning'
 import { getColor } from '../lib/utils/colors'
 import {
@@ -39,6 +61,16 @@ type SprintPlanningProps = {
   savePlanningMessage: string
   hasPlanningChanges: boolean
   canEditPlanning: boolean
+  jiraConnection: JiraConnectionStatus | null
+  jiraMessage: string
+  isLoadingJiraConnection: boolean
+  isConnectingJira: boolean
+  isDisconnectingJira: boolean
+  isImportingJiraSprint: boolean
+  onConnectJira: () => void
+  onRefreshJiraConnection: () => void
+  onDisconnectJira: () => void
+  onImportJiraSprint: (params: JiraSprintImportParams) => void
 }
 
 const emptyMemberForm: NewMemberForm = { name: '', type: 'dev', capacity: '' }
@@ -103,12 +135,26 @@ export default function SprintPlanning({
   savePlanningMessage,
   hasPlanningChanges,
   canEditPlanning,
+  jiraConnection,
+  jiraMessage,
+  isLoadingJiraConnection,
+  isConnectingJira,
+  isDisconnectingJira,
+  isImportingJiraSprint,
+  onConnectJira,
+  onRefreshJiraConnection,
+  onDisconnectJira,
+  onImportJiraSprint,
 }: SprintPlanningProps) {
   const [newMember, setNewMember] = React.useState<NewMemberForm>(emptyMemberForm)
   const [newTask, setNewTask] = React.useState<NewTaskForm>(emptyTaskForm)
   const [isExporting, setIsExporting] = React.useState(false)
   const [exportError, setExportError] = React.useState('')
   const [isMembersSectionOpen, setIsMembersSectionOpen] = React.useState(true)
+  const [jiraBoardId, setJiraBoardId] = React.useState('')
+  const [jiraSprintId, setJiraSprintId] = React.useState('')
+  const [jiraSprintName, setJiraSprintName] = React.useState('')
+  const [forceJiraRefresh, setForceJiraRefresh] = React.useState(false)
 
   const summary = React.useMemo(() => getSprintSummary(planning), [planning])
 
@@ -265,9 +311,25 @@ export default function SprintPlanning({
   const canExport = planning.members.length > 0 || planning.tasks.length > 0
   const canDistribute = planning.members.some(member => member.active && member.name.trim())
   const cannotEditMessage = 'Somente ADMIN ou SCRUM pode alterar dados da guia Sprint.'
+  const jiraConnected = Boolean(jiraConnection?.connected)
+  const canDisconnectJira = jiraConnection?.canDisconnect !== false
+  const effectiveJiraSprintName = jiraSprintName.trim() || planning.sprintName.trim()
+  const canImportJiraSprint = canEditPlanning &&
+    jiraConnected &&
+    !isImportingJiraSprint &&
+    Boolean(jiraSprintId.trim() || (jiraBoardId.trim() && effectiveJiraSprintName))
   const balanceClass = summary.balance < 0
     ? 'text-red-700 dark:text-red-300'
     : 'text-green-700 dark:text-green-300'
+
+  const importJiraSprint = () => {
+    onImportJiraSprint({
+      boardId: jiraBoardId.trim(),
+      sprintId: jiraSprintId.trim(),
+      sprintName: effectiveJiraSprintName,
+      forceRefresh: forceJiraRefresh,
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -398,6 +460,127 @@ export default function SprintPlanning({
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="p-4 bg-white dark:bg-gray-800 shadow rounded transition-colors space-y-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            <Cloud size={20} className="shrink-0 text-green-700 dark:text-green-300" />
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold">Jira</h2>
+              <p className="truncate text-sm text-gray-600 dark:text-gray-300">
+                {isLoadingJiraConnection
+                  ? 'Verificando conexao'
+                  : jiraConnected
+                    ? jiraConnection?.siteName || jiraConnection?.siteUrl || 'Conectado pelo backend'
+                    : 'Desconectado'}
+              </p>
+            </div>
+            <span className={`ml-1 rounded px-2 py-1 text-xs font-semibold ${
+              jiraConnected
+                ? 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-200'
+                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
+            }`}>
+              {jiraConnected ? 'Conectado' : 'Offline'}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onRefreshJiraConnection}
+              disabled={!canEditPlanning || isLoadingJiraConnection}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded bg-gray-100 px-3 text-gray-800 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              <RefreshCw size={16} />
+              Status
+            </button>
+            {jiraConnected && canDisconnectJira ? (
+              <button
+                type="button"
+                onClick={onDisconnectJira}
+                disabled={!canEditPlanning || isDisconnectingJira}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded bg-gray-100 px-3 text-gray-800 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+              >
+                <Unlink size={16} />
+                {isDisconnectingJira ? 'Desconectando' : 'Desconectar'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onConnectJira}
+                disabled={!canEditPlanning || isConnectingJira}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded bg-blue-500 px-3 text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Link2 size={16} />
+                {isConnectingJira ? 'Conectando' : 'Conectar Jira'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-[120px_120px_minmax(220px,1fr)_140px_auto] lg:items-end">
+          <label className="space-y-1">
+            <span className="block text-xs font-medium text-gray-500 dark:text-gray-400">Board ID</span>
+            <input
+              inputMode="numeric"
+              placeholder="123"
+              value={jiraBoardId}
+              onChange={e => setJiraBoardId(e.target.value)}
+              disabled={!canEditPlanning || !jiraConnected || isImportingJiraSprint}
+              className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="block text-xs font-medium text-gray-500 dark:text-gray-400">Sprint ID</span>
+            <input
+              inputMode="numeric"
+              placeholder="456"
+              value={jiraSprintId}
+              onChange={e => setJiraSprintId(e.target.value)}
+              disabled={!canEditPlanning || !jiraConnected || isImportingJiraSprint}
+              className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="block text-xs font-medium text-gray-500 dark:text-gray-400">Nome da sprint no Jira</span>
+            <input
+              placeholder={planning.sprintName || 'BRAVO Sprint 128'}
+              value={jiraSprintName}
+              onChange={e => setJiraSprintName(e.target.value)}
+              disabled={!canEditPlanning || !jiraConnected || isImportingJiraSprint}
+              className="h-10 w-full border p-2 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
+            />
+          </label>
+          <label className="flex h-10 items-center gap-2 rounded border border-gray-200 bg-gray-50 px-3 text-sm dark:border-gray-700 dark:bg-gray-900/40">
+            <input
+              type="checkbox"
+              checked={forceJiraRefresh}
+              onChange={e => setForceJiraRefresh(e.target.checked)}
+              disabled={!canEditPlanning || !jiraConnected || isImportingJiraSprint}
+              className="h-4 w-4 rounded border-gray-300 text-green-700 focus:ring-green-700"
+            />
+            Ignorar cache
+          </label>
+          <button
+            type="button"
+            onClick={importJiraSprint}
+            disabled={!canImportJiraSprint}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded bg-green-700 px-3 text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Search size={16} />
+            {isImportingJiraSprint ? 'Importando' : 'Importar estorias'}
+          </button>
+        </div>
+
+        {jiraMessage && (
+          <p className="text-sm text-gray-600 dark:text-gray-300">{jiraMessage}</p>
+        )}
+        {jiraConnected && jiraConnection?.serviceConnection && (
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            Integracao usando token configurado no backend.
+          </p>
+        )}
       </section>
 
       <section className="p-4 bg-white dark:bg-gray-800 shadow rounded transition-colors space-y-4">
