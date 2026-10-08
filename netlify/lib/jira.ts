@@ -227,7 +227,11 @@ export class JiraClient {
       if (!response.ok)
         throw new JiraError(
           response.status >= 500 ? 502 : response.status,
-          errorMessage(response.status),
+          response.status === 400 && path.includes('/mypermissions')
+            ? 'Jira recusou a verificação de permissão Work on issues para registrar horas.'
+            : response.status === 400 && write
+              ? 'Jira recusou o registro de horas. Confira a data, a duração e as regras de controle de tempo do projeto.'
+              : errorMessage(response.status),
           undefined,
           write && response.status >= 500
         )

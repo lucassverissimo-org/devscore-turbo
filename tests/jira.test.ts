@@ -49,10 +49,17 @@ function fixture() {
       }
       if (url.endsWith('/myself') || url.includes('/user?accountId'))
         return Response.json(user)
-      if (url.includes('/mypermissions'))
+      if (url.includes('/mypermissions')) {
+        const permission = new URL(url).searchParams.get('permissions')
+        if (permission !== 'WORK_ON_ISSUES')
+          return Response.json(
+            { errorMessages: ['Unrecognized permission'] },
+            { status: 400 }
+          )
         return Response.json({
-          permissions: { WORK_ISSUES: { havePermission: true } },
+          permissions: { WORK_ON_ISSUES: { havePermission: true } },
         })
+      }
       if (url.endsWith('/sprint/123'))
         return Response.json({
           id: 123,
@@ -100,6 +107,34 @@ function fixture() {
   return { fetcher, posts }
 }
 describe('Netlify Function: proteção e revalidação', () => {
+  it('consulta WORK_ON_ISSUES antes de criar horas sem comentário', async () => {
+    const { fetcher, posts } = fixture()
+    const withoutComment = { ...entry, comment: '' }
+    const response = await handle(
+      request({
+        action: 'create',
+        credentials,
+        sprintId: 123,
+        user,
+        period,
+        entry: withoutComment,
+        pending: [withoutComment],
+        confirmed: true,
+      }),
+      {},
+      fetcher
+    )
+    expect(response.status).toBe(200)
+    expect(
+      vi.mocked(fetcher).mock.calls.some(([url]) =>
+        String(url).includes('permissions=WORK_ON_ISSUES')
+      )
+    ).toBe(true)
+    expect(posts[0].body).toEqual({
+      started: '2026-10-05T12:00:00.000+0000',
+      timeSpentSeconds: 3600,
+    })
+  })
   it.each([
     ['2026-09-28', '2026-09-30'],
     ['2026-11-02', '2026-11-03'],
@@ -282,7 +317,7 @@ describe('Netlify Function: proteção e revalidação', () => {
     const proxy: typeof fetch = async (input, init) =>
       String(input).includes('/mypermissions')
         ? Response.json({
-            permissions: { WORK_ISSUES: { havePermission: false } },
+            permissions: { WORK_ON_ISSUES: { havePermission: false } },
           })
         : fetcher(input, init)
     const result = await handle(

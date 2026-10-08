@@ -108,7 +108,7 @@ function fixture(other = false) {
         })
       if (url.includes('/mypermissions'))
         return Response.json({
-          permissions: { WORK_ISSUES: { havePermission: true } },
+          permissions: { WORK_ON_ISSUES: { havePermission: true } },
         })
       if (url.includes('/worklog?') && init?.method === 'POST') {
         writes.push({ url, body })

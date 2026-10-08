@@ -1,11 +1,10 @@
 /// <reference types="vite/client" />
 
-import { createClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
-export const appEnvironment = import.meta.env.VITE_APP_ENV || import.meta.env.MODE
+export const appEnvironment =
+  import.meta.env.VITE_APP_ENV || import.meta.env.MODE
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-export const supabase =
-  supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null
+// Legacy adapters remain disabled; the application operates without a database.
+// Type-only import does not initialize the SDK or restore browser sessions.
+export const supabase = null as SupabaseClient | null

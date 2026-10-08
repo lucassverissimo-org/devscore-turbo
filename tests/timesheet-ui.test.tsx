@@ -102,8 +102,12 @@ async function configure() {
   await actions.selectOptions(screen.getByLabelText('Sprint'), '123')
   await waitFor(() =>
     expect(
-      (screen.getByLabelText('Data inicial') as HTMLInputElement).value
-    ).toBe('2026-10-05')
+      (
+        screen.getByRole('button', {
+          name: 'Consultar tasks e saldos',
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(false)
   )
   return actions
 }
@@ -112,12 +116,30 @@ describe('fluxo Timesheet na interface', () => {
     const actions = await configure()
     expect(screen.queryByLabelText('Sprint ID')).toBeNull()
     expect(getSprints).toHaveBeenCalledWith(7, expect.any(Object), 'cloud')
+    expect(screen.queryByLabelText('Data inicial')).toBeNull()
+    await actions.click(
+      screen.getByRole('button', { name: 'Consultar tasks e saldos' })
+    )
+    await screen.findByRole('heading', {
+      name: 'Quando você quer registrar as horas?',
+    })
+    const readsBeforeEditingPeriod = vi.mocked(getAnalysis).mock.calls.length
     fireEvent.change(screen.getByLabelText('Data inicial'), {
       target: { value: '2026-09-28' },
     })
     fireEvent.change(screen.getByLabelText('Data final'), {
       target: { value: '2026-09-30' },
     })
+    expect(getAnalysis).toHaveBeenCalledTimes(readsBeforeEditingPeriod)
+    await actions.click(screen.getByRole('button', { name: 'Gerar sugestão' }))
+    await screen.findByRole('button', { name: 'Revisar apontamentos' })
+    expect(getAnalysis).toHaveBeenLastCalledWith(
+      123,
+      user,
+      expect.objectContaining({ start: '2026-09-28', end: '2026-09-30' }),
+      expect.any(Object),
+      'cloud'
+    )
     await actions.selectOptions(screen.getByLabelText('Board'), '')
     expect((screen.getByLabelText('Sprint') as HTMLSelectElement).value).toBe(
       ''
@@ -125,7 +147,7 @@ describe('fluxo Timesheet na interface', () => {
     expect(
       (
         screen.getByRole('button', {
-          name: 'Analisar Sprint',
+          name: 'Consultar tasks e saldos',
         }) as HTMLButtonElement
       ).disabled
     ).toBe(true)
@@ -136,11 +158,17 @@ describe('fluxo Timesheet na interface', () => {
       expect(
         (
           screen.getByRole('button', {
-            name: 'Analisar Sprint',
+            name: 'Consultar tasks e saldos',
           }) as HTMLButtonElement
         ).disabled
       ).toBe(false)
     )
+    await actions.click(
+      screen.getByRole('button', { name: 'Consultar tasks e saldos' })
+    )
+    await screen.findByRole('heading', {
+      name: 'Quando você quer registrar as horas?',
+    })
     expect(
       (screen.getByLabelText('Data inicial') as HTMLInputElement).value
     ).toBe('2026-09-28')
@@ -190,7 +218,9 @@ describe('fluxo Timesheet na interface', () => {
   })
   it('edita na confirmação, recalcula totais e só escreve após confirmação', async () => {
     const actions = await configure()
-    await actions.click(screen.getByRole('button', { name: 'Analisar Sprint' }))
+    await actions.click(
+      screen.getByRole('button', { name: 'Consultar tasks e saldos' })
+    )
     await screen.findByRole('heading', { name: 'Análise da Sprint' })
     await actions.click(screen.getByRole('button', { name: 'Gerar sugestão' }))
     expect(createWorklog).not.toHaveBeenCalled()
@@ -204,6 +234,10 @@ describe('fluxo Timesheet na interface', () => {
       name: 'Confirmar e registrar no Jira',
     }) as HTMLButtonElement
     expect(submit.disabled).toBe(true)
+    expect(
+      screen.getByRole('list', { name: 'Lançamentos a registrar' }).textContent
+    ).toContain('05/10/2026: ABC-1 => 6h')
+    await actions.click(screen.getByText('Editar lançamentos antes de enviar'))
     const hours = screen.getByRole('spinbutton', { name: /Horas auto-/ })
     for (const [value, total] of [
       ['0.5', '30m'],
@@ -215,6 +249,10 @@ describe('fluxo Timesheet na interface', () => {
       expect(
         screen.getByText(`Serão criados: 1 worklogs · Total: ${total}`)
       ).toBeTruthy()
+      expect(
+        screen.getByRole('list', { name: 'Lançamentos a registrar' })
+          .textContent
+      ).toContain(`05/10/2026: ABC-1 => ${total}`)
     }
     fireEvent.change(hours, { target: { value: '2' } })
     expect(
@@ -238,33 +276,23 @@ describe('fluxo Timesheet na interface', () => {
       ).disabled
     ).toBe(true)
   })
-  it('outro usuário pode preparar e editar, mas não confirmar envio', async () => {
+  it('analisa somente a conta conectada, sem busca ou troca de usuário', async () => {
     const actions = await configure()
-    await actions.type(screen.getByLabelText('Procurar outro usuário'), 'João')
-    await actions.click(screen.getByRole('button', { name: 'Buscar usuário' }))
-    await screen.findByRole('option', { name: 'João' })
-    await actions.selectOptions(
-      screen.getByLabelText('Usuário analisado'),
-      'other'
-    )
-    await actions.click(screen.getByRole('button', { name: 'Analisar Sprint' }))
-    await screen.findByRole('heading', { name: 'Análise da Sprint' })
-    await actions.click(screen.getByRole('button', { name: 'Gerar sugestão' }))
+    expect(screen.queryByLabelText('Procurar outro usuário')).toBeNull()
+    expect(screen.queryByLabelText('Usuário analisado')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Buscar usuário' })).toBeNull()
     await actions.click(
-      screen.getByRole('button', { name: 'Revisar apontamentos' })
+      screen.getByRole('button', { name: 'Consultar tasks e saldos' })
     )
-    expect(
-      screen.getByText(
-        /Você está analisando outro usuário.*Análise, edição e CSV/
-      )
-    ).toBeTruthy()
-    expect(
-      (
-        screen.getByRole('button', {
-          name: 'Ir para confirmação',
-        }) as HTMLButtonElement
-      ).disabled
-    ).toBe(true)
+    await screen.findByRole('heading', { name: 'Análise da Sprint' })
+    expect(getAnalysis).toHaveBeenLastCalledWith(
+      123,
+      user,
+      expect.any(Object),
+      expect.any(Object),
+      'cloud'
+    )
+    expect(findUsers).not.toHaveBeenCalled()
     expect(createWorklog).not.toHaveBeenCalled()
   })
   it.each(['cloud', 'data-center'] as const)(
@@ -297,9 +325,7 @@ describe('fluxo Timesheet na interface', () => {
         )
       await actions.type(screen.getByLabelText(label), 'session-secret')
       expect(sessionStorage.getItem(CONNECTION_SESSION_KEY)).toBeNull()
-      await actions.click(
-        screen.getByRole('button', { name: 'Conectar' })
-      )
+      await actions.click(screen.getByRole('button', { name: 'Conectar' }))
       await screen.findByText('Conectado como: Lucas')
       expect(
         JSON.parse(sessionStorage.getItem(CONNECTION_SESSION_KEY)!)
@@ -346,15 +372,19 @@ describe('fluxo Timesheet na interface', () => {
     await screen.findByText('Credenciais inválidas')
     expect(sessionStorage.getItem(CONNECTION_SESSION_KEY)).toBeNull()
   })
-  it('desfazer e duplicidade são refletidos imediatamente', async () => {
+  it('permite remover pela lixeira e desfazer sem duplicar ou dividir', async () => {
     const actions = await configure()
-    await actions.click(screen.getByRole('button', { name: 'Analisar Sprint' }))
+    await actions.click(
+      screen.getByRole('button', { name: 'Consultar tasks e saldos' })
+    )
     await screen.findByRole('heading', { name: 'Análise da Sprint' })
     await actions.click(screen.getByRole('button', { name: 'Gerar sugestão' }))
-    await actions.click(screen.getByRole('button', { name: 'Duplicar' }))
-    expect(
-      screen.getAllByText(/ERROR: Possível duplicidade entre os lançamentos/)
-    ).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: 'Duplicar' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Dividir' })).toBeNull()
+    await actions.click(
+      screen.getByRole('button', { name: /Remover lançamento/ })
+    )
+    expect(screen.queryByRole('spinbutton', { name: /Horas/ })).toBeNull()
     await actions.click(
       screen.getByRole('button', { name: 'Desfazer alteração' })
     )

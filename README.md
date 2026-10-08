@@ -129,6 +129,8 @@ Depois de mudar secrets, faça um novo deploy. Nenhuma configuração remota ou 
 
 ### Conexão, permissões e identidade
 
+A interface analisa somente a conta Jira autenticada. A busca e a seleção de outros usuários foram retiradas; para usar outra conta, desconecte e conecte com as credenciais dela.
+
 Escolha **Tipo de Jira** antes de conectar. Para Cloud, crie o API Token na conta Atlassian e informe URL, e-mail e token. Para Data Center, crie um Personal Access Token na sua conta Jira e informe URL + PAT. Clique **Conectar**: a Function usa `/rest/api/3/myself` no Cloud ou `/rest/api/2/myself` no Data Center e retorna somente usuário, timezone e URL pública.
 
 **Worklogs somente podem ser registrados utilizando a identidade Jira autenticada.**
@@ -158,6 +160,8 @@ O algoritmo é puro, determinístico e ordena issues por key e dias cronologicam
 A grade permite adicionar, remover, editar issue/data/duração/comentário, duplicar, dividir e desfazer alterações. Depois de uma edição, totais e validações são recalculados. Dividir um lançamento em dois blocos idênticos na mesma issue/data produz alerta de duplicidade: ajuste as datas/durações ou remova um bloco antes do envio.
 
 A revisão e a confirmação são etapas separadas. A confirmação exige reconhecer explicitamente os dados e avisos. ERROR bloqueia envio; WARNING permite excessos manuais apenas depois da confirmação. O backend recarrega Sprint, usuário, issues e worklogs antes de cada criação e verifica permissões, identidade, período, duração, saldo e duplicidade.
+
+Na interface, **Consultar tasks e saldos** consulta as tasks da Sprint inteira. O período aparece depois, em **Quando você quer registrar as horas?**. Editar datas não consulta nem grava no Jira; **Gerar sugestão** atualiza os saldos e worklogs do período escolhido antes de distribuir as horas. **Revisar apontamentos** abre a conferência da grade e não registra horas. A confirmação exibe uma lista ordenada por data e issue, no formato `DD/MM/AAAA: ISSUE => duração`, com comentários e total. A grade fica recolhida nessa etapa e pode ser aberta para editar; a lista e a confirmação acompanham essas edições. Somente **Confirmar e registrar no Jira** envia o lote.
 
 O registro é sequencial, com progresso e bloqueio de edição/duplo envio. Falhas individuais não interrompem itens seguintes, exceto quando o Jira retorna 429: os itens restantes são adiados para respeitar `Retry-After`, sem retry automático de POST. Sucessos guardam o Worklog ID e não são reenviados no retry. Timeout, falha de rede ou 5xx durante uma escrita podem ter resultado incerto: confira a issue no Jira; a tela exige essa revisão antes de liberar nova tentativa. Duplicidades existentes continuam bloqueadas na revalidação.
 
@@ -216,3 +220,7 @@ Com `npm run dev:netlify` em execução, rode `npm run test:functions` em outro 
 A configuração de runtime segue a [documentação de Functions Netlify](https://docs.netlify.com/build/functions/configuration/?fn-language=js): o runtime padrão acompanha o Node.js válido utilizado no build. Se o site já tiver `AWS_LAMBDA_JS_RUNTIME` definido externamente, configure `nodejs22.x` na UI/CLI do Netlify, pois esse override não pode ser definido em `netlify.toml`.
 
 Resultados desta implementação e limites da validação estão registrados em [VERIFICATION.md](VERIFICATION.md).
+
+### Operação sem Supabase
+
+O cliente Supabase está permanentemente desativado, independentemente das variáveis de ambiente antigas. O DevScore usa seu fluxo local, sem login nem sincronização com a base. Os adaptadores antigos permanecem como código inativo. O Timesheet exige credenciais Jira fornecidas na tela; o modo de credenciais do deploy foi desativado. Nenhuma sessão Supabase é restaurada ou renovada.

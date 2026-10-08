@@ -3,7 +3,6 @@ import type { User } from '@supabase/supabase-js'
 import { useTheme } from './ThemeProvider'
 import { supabase } from './lib/supabase'
 
-import AuthPanel from './components/AuthPanel'
 import Header from './components/Header'
 import TeamSelector from './components/TeamSelector'
 import AddDevForm from './components/AddDevForm'
@@ -225,27 +224,6 @@ function getUserMetadataName(user: User | null): string {
       : ''
 }
 
-function getAuthErrorMessage(message: string): string {
-  if (message.toLowerCase().includes('email rate limit exceeded')) {
-    return 'Limite temporario de envio de email atingido no Supabase. Aguarde alguns minutos antes de tentar novamente.'
-  }
-
-  return message
-}
-
-function getAuthRedirectUrl(): string | undefined {
-  const configuredRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL?.trim()
-  if (configuredRedirectUrl) return configuredRedirectUrl.replace(/\/+$/, '')
-
-  if (typeof window === 'undefined') return undefined
-
-  const currentOrigin = window.location.origin
-  const currentHost = window.location.hostname
-  const isLocalhost = currentHost === 'localhost' || currentHost === '127.0.0.1'
-
-  return isLocalhost ? undefined : currentOrigin
-}
-
 function App() {
   const { theme, setTheme } = useTheme()
   const [showSettings, setShowSettings] = useState(false)
@@ -271,8 +249,8 @@ function App() {
   const [distributionSaveMessage, setDistributionSaveMessage] = useState('')
   const [authUser, setAuthUser] = useState<User | null>(null)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false)
-  const [authMessage, setAuthMessage] = useState('')
+  const [, setIsLoadingProfile] = useState(false)
+  const [, setAuthMessage] = useState('')
   const [jiraConnection, setJiraConnection] = useState<JiraConnectionStatus | null>(null)
   const [jiraMessage, setJiraMessage] = useState('')
   const [isLoadingJiraConnection, setIsLoadingJiraConnection] = useState(false)
@@ -347,7 +325,7 @@ function App() {
 
   const refreshSprintRecords = React.useCallback(async (selectFirstRecord: boolean) => {
     if (!supabase) {
-      setSprintMessage('Supabase indisponivel. Usando dados locais.')
+      setSprintMessage('Usando dados locais.')
       return
     }
 
@@ -924,76 +902,6 @@ function App() {
     )
   }
 
-  const signIn = async (email: string, password: string) => {
-    if (!supabase) {
-      setAuthMessage('Supabase indisponivel.')
-      return
-    }
-
-    const trimmedEmail = email.trim()
-    if (!trimmedEmail || !password) {
-      setAuthMessage('Informe email e senha.')
-      return
-    }
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: trimmedEmail,
-      password,
-    })
-
-    setAuthMessage(error ? `Nao foi possivel entrar: ${getAuthErrorMessage(error.message)}` : 'Login realizado.')
-  }
-
-  const signUp = async (email: string, password: string, fullName: string) => {
-    if (!supabase) {
-      setAuthMessage('Supabase indisponivel.')
-      return
-    }
-
-    const trimmedEmail = email.trim()
-    const trimmedFullName = fullName.trim()
-    if (!trimmedFullName || !trimmedEmail || !password) {
-      setAuthMessage('Informe nome, email e senha.')
-      return
-    }
-
-    const { data, error } = await supabase.auth.signUp({
-      email: trimmedEmail,
-      password,
-      options: {
-        emailRedirectTo: getAuthRedirectUrl(),
-        data: {
-          full_name: trimmedFullName,
-        },
-      },
-    })
-
-    if (error) {
-      setAuthMessage(`Nao foi possivel criar a conta: ${getAuthErrorMessage(error.message)}`)
-      return
-    }
-
-    setAuthMessage(
-      data.session
-        ? 'Conta criada. Perfil inicial USER.'
-        : 'Conta criada. Confirme o email antes de entrar.',
-    )
-  }
-
-  const signOut = async () => {
-    if (!supabase) return
-
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      setAuthMessage(`Nao foi possivel sair: ${error.message}`)
-      return
-    }
-
-    setJiraConnection(null)
-    setJiraMessage('')
-    setAuthMessage('Logout realizado.')
-  }
-
   const savePlanning = async () => {
     if (!hasSprintPlanningWriteAccess) {
       setPlanningSaveMessage('Somente ADMIN ou SCRUM pode salvar dados da guia Sprint.')
@@ -1009,7 +917,7 @@ function App() {
 
     if (!supabase) {
       setPlanningSnapshot(JSON.stringify(sprintPlanning))
-      setPlanningSaveMessage('Supabase indisponivel. Dados da Sprint salvos apenas localmente.')
+      setPlanningSaveMessage('Dados da Sprint salvos localmente.')
       return
     }
 
@@ -1064,7 +972,7 @@ function App() {
 
     if (!supabase) {
       setDistributionSnapshot(JSON.stringify(distributionData))
-      setDistributionSaveMessage('Supabase indisponivel. Distribuicao salva apenas localmente.')
+      setDistributionSaveMessage('Distribuicao salva localmente.')
       return
     }
 
@@ -1114,25 +1022,7 @@ function App() {
           setShowAuthPanel={setShowAuthPanel}
           authDisplayName={authDisplayName}
           authRole={currentUserRole ? `Perfil ${currentUserRole}` : ''}
-          authMenu={
-            supabase ? (
-              <AuthPanel
-                userEmail={authUser?.email ?? ''}
-                userName={userProfile?.fullName ?? ''}
-                role={currentUserRole}
-                canEditSprintPlanning={hasSprintPlanningWriteAccess}
-                isLoadingProfile={isLoadingProfile}
-                message={authMessage}
-                onSignIn={signIn}
-                onSignUp={signUp}
-                onSignOut={signOut}
-              />
-            ) : (
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Supabase indisponivel. Login desativado neste ambiente.
-              </p>
-            )
-          }
+          authMenu={null}
         />
 
         {isSprintEnabled && (

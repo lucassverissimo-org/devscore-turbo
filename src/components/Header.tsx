@@ -53,7 +53,7 @@ export default function Header({
       <h1 className="text-xl font-bold text-green-800 dark:text-green-100">Dev-Tools</h1>
 
       <div className="flex items-center gap-2">
-        <div ref={authMenuRef} className="relative flex items-center gap-2">
+        {authMenu && <div ref={authMenuRef} className="relative flex items-center gap-2">
           {authDisplayName && (
             <div className="max-w-[96px] text-right leading-tight sm:max-w-[220px]">
               <p className="truncate text-sm font-semibold text-gray-800 dark:text-gray-100">{authDisplayName}</p>
@@ -77,7 +77,7 @@ export default function Header({
               {authMenu}
             </div>
           )}
-        </div>
+        </div>}
 
         <button
           onClick={() => setShowSettings(true)}

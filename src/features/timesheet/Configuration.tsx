@@ -1,5 +1,5 @@
 import React from 'react'
-import { findUsers } from './api'
+import { RefreshCw, Search, ListFilter, LogIn } from 'lucide-react'
 import { displayDate, logicalDate } from './dates'
 import { Button, Field, inputClass, panelClass } from './ui'
 import type { useTimesheet } from './useTimesheet'
@@ -14,11 +14,6 @@ export default function Configuration({
     credentials,
     connected,
     selected,
-    setSelected,
-    users,
-    setUsers,
-    query,
-    setQuery,
     boards,
     boardId,
     sprints,
@@ -27,16 +22,11 @@ export default function Configuration({
     refreshBoards,
     sprint,
     period,
-    setPeriod,
     busy,
-    run,
-    resetAnalysis,
     disconnect,
     changeCredentials,
     connect,
     analyze,
-    activeCredentials,
-    setMessage,
   } = controller
   return (
     <fieldset disabled={busy} className={`${panelClass} disabled:opacity-75`}>
@@ -46,67 +36,82 @@ export default function Configuration({
           Conexão Jira {deployment === 'cloud' ? 'Cloud' : 'Data Center'}
         </h2>
         {connected && (
-          <Button onClick={disconnect}>Desconectar e limpar credenciais</Button>
+          <Button variant="secondary" onClick={disconnect}>
+            Desconectar e limpar credenciais
+          </Button>
         )}
       </div>
-      <Field label="Tipo de Jira">
-        <select
-          className={inputClass}
-          value={deployment}
-          onChange={(event) =>
-            changeDeployment(event.target.value as typeof deployment)
-          }
-        >
-          <option value="cloud">Jira Cloud</option>
-          <option value="data-center">Jira Data Center (PAT)</option>
-        </select>
-      </Field>
-      <div className="grid gap-3 md:grid-cols-3">
-        <Field label="Jira Base URL">
-          <input
-            autoComplete="off"
+      <details
+        open={!connected}
+        className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-3"
+      >
+        <summary className="cursor-pointer font-medium">
+          {connected ? 'Dados da conexão' : 'Informe sua conexão Jira'}
+        </summary>
+        <Field label="Tipo de Jira">
+          <select
             className={inputClass}
-            placeholder={
-              deployment === 'cloud'
-                ? 'https://seu-site.atlassian.net'
-                : 'https://agile.corp.edp.pt'
-            }
-            value={credentials.baseUrl}
+            value={deployment}
             onChange={(event) =>
-              changeCredentials({ baseUrl: event.target.value })
+              changeDeployment(event.target.value as typeof deployment)
             }
-          />
+          >
+            <option value="cloud">Jira Cloud</option>
+            <option value="data-center">Jira Data Center (PAT)</option>
+          </select>
         </Field>
-        {deployment === 'cloud' && (
-          <Field label="E-mail Jira">
+        <div className="grid gap-3 md:grid-cols-3">
+          <Field label="Jira Base URL">
             <input
               autoComplete="off"
               className={inputClass}
-              type="email"
-              value={credentials.email}
+              placeholder={
+                deployment === 'cloud'
+                  ? 'https://seu-site.atlassian.net'
+                  : 'https://agile.corp.edp.pt'
+              }
+              value={credentials.baseUrl}
               onChange={(event) =>
-                changeCredentials({ email: event.target.value })
+                changeCredentials({ baseUrl: event.target.value })
               }
             />
           </Field>
-        )}
-        <Field
-          label={
-            deployment === 'cloud' ? 'API Token' : 'PAT (Personal Access Token)'
-          }
-        >
-          <input
-            autoComplete="off"
-            className={inputClass}
-            type="password"
-            value={credentials.token}
-            onChange={(event) =>
-              changeCredentials({ token: event.target.value })
+          {deployment === 'cloud' && (
+            <Field label="E-mail Jira">
+              <input
+                autoComplete="off"
+                className={inputClass}
+                type="email"
+                value={credentials.email}
+                onChange={(event) =>
+                  changeCredentials({ email: event.target.value })
+                }
+              />
+            </Field>
+          )}
+          <Field
+            label={
+              deployment === 'cloud'
+                ? 'API Token'
+                : 'PAT (Personal Access Token)'
             }
-          />
-        </Field>
-      </div>
-      <Button onClick={connect}>Conectar</Button>
+          >
+            <input
+              autoComplete="off"
+              className={inputClass}
+              type="password"
+              value={credentials.token}
+              onChange={(event) =>
+                changeCredentials({ token: event.target.value })
+              }
+            />
+          </Field>
+        </div>
+        <Button onClick={connect}>
+          <LogIn size={16} aria-hidden="true" />
+          Conectar
+        </Button>
+      </details>
       {connected && (
         <p className="font-semibold text-green-700 dark:text-green-300">
           Conectado como: {connected.displayName}
@@ -114,7 +119,21 @@ export default function Configuration({
       )}
       {connected && (
         <>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-semibold flex items-center gap-2">
+              <ListFilter size={18} aria-hidden="true" />
+              Selecione as tasks que serão consultadas
+            </h3>
+            <Button
+              variant="secondary"
+              onClick={refreshBoards}
+              title="Busca novamente os boards disponíveis para sua conta"
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+              Atualizar boards
+            </Button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
             <Field label="Board">
               <select
                 className={inputClass}
@@ -157,66 +176,6 @@ export default function Configuration({
                 <small>Nenhuma Sprint disponível neste board.</small>
               )}
             </Field>
-            <Field label="Usuário analisado">
-              <select
-                className={inputClass}
-                value={selected?.accountId || ''}
-                onChange={(event) => {
-                  setSelected(
-                    users.find(
-                      (user) => user.accountId === event.target.value
-                    ) || null
-                  )
-                  resetAnalysis()
-                }}
-              >
-                {users.map((user) => (
-                  <option key={user.accountId} value={user.accountId}>
-                    {user.displayName}
-                    {user.accountId === connected.accountId
-                      ? ' (sua conta)'
-                      : ''}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <Button onClick={refreshBoards}>Atualizar boards</Button>
-          <div className="flex flex-wrap items-end gap-2">
-            <Field label="Procurar outro usuário">
-              <input
-                className={inputClass}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </Field>
-            <Button
-              disabled={!query.trim()}
-              onClick={() =>
-                run(async () => {
-                  const found = await findUsers(
-                    query,
-                    activeCredentials,
-                    deployment
-                  )
-                  setUsers([
-                    ...new Map(
-                      [
-                        connected,
-                        ...(selected ? [selected] : []),
-                        ...found,
-                      ].map((user) => [user.accountId, user])
-                    ).values(),
-                  ])
-                  if (!found.length)
-                    setMessage(
-                      'Nenhum usuário encontrado. Confira o nome e a permissão Browse users and groups.'
-                    )
-                })
-              }
-            >
-              Buscar usuário
-            </Button>
           </div>
           {sprint && (
             <p>
@@ -230,57 +189,14 @@ export default function Configuration({
                 : 'Fim não informado'}
             </p>
           )}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Data inicial">
-              <input
-                className={inputClass}
-                type="date"
-                value={period.start}
-                onChange={(event) => {
-                  setPeriod({ ...period, start: event.target.value })
-                  resetAnalysis()
-                }}
-              />
-            </Field>
-            <Field label="Data final">
-              <input
-                className={inputClass}
-                type="date"
-                value={period.end}
-                onChange={(event) => {
-                  setPeriod({ ...period, end: event.target.value })
-                  resetAnalysis()
-                }}
-              />
-            </Field>
-            <Field label="Jornada diária (horas)">
-              <input
-                className={inputClass}
-                type="number"
-                step="0.25"
-                min="0.25"
-                max="24"
-                value={period.dailySeconds / 3600}
-                onChange={(event) => {
-                  setPeriod({
-                    ...period,
-                    dailySeconds: Number(event.target.value) * 3600,
-                  })
-                  resetAnalysis()
-                }}
-              />
-            </Field>
-            <Field label="Timezone">
-              <input className={inputClass} value={period.timezone} readOnly />
-              <small>Configurado por JIRA_TIMEZONE no servidor.</small>
-            </Field>
-          </div>
-          <Button
-            disabled={!sprint || !selected || !period.start || !period.end}
-            onClick={analyze}
-          >
-            Analisar Sprint
+          <Button disabled={!sprint || !selected} onClick={analyze}>
+            <Search size={16} aria-hidden="true" />
+            Consultar tasks e saldos
           </Button>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Consulta todas as tasks atribuídas ao usuário nesta Sprint. Você
+            escolhe os dias dos apontamentos na próxima etapa.
+          </p>
         </>
       )}
     </fieldset>

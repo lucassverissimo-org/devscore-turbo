@@ -24,7 +24,7 @@ import {
   logicalDate,
   periodDays,
 } from './dates'
-import { summarize } from './distribution'
+import { distribute, summarize } from './distribution'
 import { validateEntries } from './validation'
 import { exportCsv } from './csv'
 import { submitSequential } from './submission'
@@ -41,11 +41,11 @@ export type Stage =
   | 'confirmation'
   | 'result'
 export const stages: Array<[Stage, string]> = [
-  ['configuration', 'Configuração'],
-  ['analysis', 'Análise'],
-  ['suggestion', 'Sugestão'],
-  ['review', 'Revisão'],
-  ['confirmation', 'Confirmação'],
+  ['configuration', 'Conectar e selecionar'],
+  ['analysis', 'Tasks e saldo'],
+  ['suggestion', 'Planejar horas'],
+  ['review', 'Revisar'],
+  ['confirmation', 'Confirmar envio'],
   ['result', 'Resultado'],
 ]
 export function useTimesheet() {
@@ -61,9 +61,7 @@ export function useTimesheet() {
     }
   )
   const [connected, setConnected] = useState<JiraUser | null>(null)
-  const [selected, setSelected] = useState<JiraUser | null>(null)
-  const [users, setUsers] = useState<JiraUser[]>([])
-  const [query, setQuery] = useState('')
+  const selected = connected
   const [boards, setBoards] = useState<Board[]>([])
   const [boardId, setBoardId] = useState('')
   const [sprints, setSprints] = useState<Sprint[]>([])
@@ -85,6 +83,7 @@ export function useTimesheet() {
   const fingerprint = (entry: Entry) =>
     `${deployment}|${analysis?.baseUrl || ''}|${selected?.accountId || ''}|${entry.issueKey}|${entry.date}|${entry.seconds}`
   const [message, setMessage] = useState('')
+  const [messageError, setMessageError] = useState(false)
   const [progress, setProgress] = useState('')
   const [acknowledged, setAcknowledged] = useState(false)
   const [cooldown, setCooldown] = useState(0)
@@ -94,9 +93,11 @@ export function useTimesheet() {
     busyRef.current = true
     setBusy(true)
     setMessage('')
+    setMessageError(false)
     try {
       await operation()
     } catch (error) {
+      setMessageError(true)
       setMessage(
         error instanceof Error
           ? error.message
@@ -122,8 +123,6 @@ export function useTimesheet() {
     setBoardId('')
     setSprints([])
     setConnected(null)
-    setSelected(null)
-    setUsers([])
     setSprint(null)
     resetAnalysis()
     setCredentials({ baseUrl: '', email: '', token: '' })
@@ -141,7 +140,6 @@ export function useTimesheet() {
     setSprints([])
     setCredentials((current) => ({ ...current, ...patch }))
     setConnected(null)
-    setSelected(null)
     setSprint(null)
     resetAnalysis()
   }
@@ -160,8 +158,6 @@ export function useTimesheet() {
       const result = await testConnection(activeCredentials, deployment)
       saveConnectionSession({ ...activeCredentials, baseUrl: result.baseUrl })
       setConnected(result.user)
-      setSelected(result.user)
-      setUsers([result.user])
       setPeriod((current) => ({ ...current, timezone: result.timezone }))
       resetAnalysis()
       setBoardId('')
@@ -199,10 +195,12 @@ export function useTimesheet() {
           current.start ||
           (result.startDate
             ? logicalDate(result.startDate, current.timezone)
-            : ''),
+            : logicalDate(new Date().toISOString(), current.timezone)),
         end:
           current.end ||
-          (result.endDate ? logicalDate(result.endDate, current.timezone) : ''),
+          (result.endDate
+            ? logicalDate(result.endDate, current.timezone)
+            : logicalDate(new Date().toISOString(), current.timezone)),
       }))
     })
   const analyze = () =>
@@ -229,6 +227,47 @@ export function useTimesheet() {
     setEntries(next)
     setAcknowledged(false)
   }
+  const prepare = (targetPeriod: Period, automatic = true) =>
+    run(async () => {
+      if (!analysis || !selected || !sprint)
+        throw new Error('Selecione a Sprint e o usuário primeiro.')
+      if (
+        succeeded.length ||
+        entries.some((entry) => entry.result === 'uncertain')
+      )
+        throw new Error(
+          'Confira os resultados enviados antes de preparar novos apontamentos.'
+        )
+      periodDays(targetPeriod)
+      setProgress(
+        'Atualizando saldos e horas já registradas para o período escolhido…'
+      )
+      const fresh = await getAnalysis(
+        sprint.id,
+        selected,
+        targetPeriod,
+        activeCredentials,
+        deployment
+      )
+      const next = automatic
+        ? distribute(
+            fresh.issues,
+            fresh.worklogs,
+            fresh.user.accountId,
+            targetPeriod
+          ).entries
+        : []
+      setPeriod(targetPeriod)
+      setAnalysis(fresh)
+      setEntries(next)
+      setHistory([])
+      setAcknowledged(false)
+      setStage('suggestion')
+      if (automatic && !next.length)
+        setMessage(
+          'Nenhum lançamento sugerido: confira o saldo das tasks e os dias disponíveis no período. Você pode adicionar um lançamento manual.'
+        )
+    })
   const update = (id: string, patch: Partial<Entry>) => {
     const current = entries.find((entry) => entry.id === id)
     if (current?.result === 'uncertain')
@@ -429,11 +468,6 @@ export function useTimesheet() {
     credentials,
     connected,
     selected,
-    setSelected,
-    users,
-    setUsers,
-    query,
-    setQuery,
     boards,
     boardId,
     sprints,
@@ -452,6 +486,7 @@ export function useTimesheet() {
     setStage,
     busy,
     message,
+    messageError,
     progress,
     acknowledged,
     setAcknowledged,
@@ -461,6 +496,7 @@ export function useTimesheet() {
     changeCredentials,
     connect,
     analyze,
+    prepare,
     edit,
     update,
     add,

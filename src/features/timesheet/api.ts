@@ -12,7 +12,6 @@ import type {
 } from './types'
 import { cloudSiteUrl } from './cloudSite'
 import { dataCenterSiteUrl } from './dataCenterSite'
-import { supabase } from '../../lib/supabase'
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -39,16 +38,12 @@ export async function jiraRequest<T>(
       )
     }
   }
-  const session = credentials
-    ? null
-    : (await supabase?.auth.getSession())?.data.session
   let response: Response
   try {
     response = await fetch('/.netlify/functions/jira', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
       },
       body: JSON.stringify({ action, credentials, ...params, deployment }),
       cache: 'no-store',

@@ -7,10 +7,12 @@ export default function AnalysisView({
   analysis,
   period,
   entries,
+  showPlanningSummary = true,
 }: {
   analysis: Analysis
   period: Period
   entries: Parameters<typeof summarize>[4]
+  showPlanningSummary?: boolean
 }) {
   const stats = summarize(
     analysis.issues,
@@ -53,19 +55,36 @@ export default function AnalysisView({
     <section className={panelClass}>
       <h2 className="text-lg font-semibold">Análise da Sprint</h2>
       <dl className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {values.map(([label, value]) => (
-          <div key={label} className="rounded bg-gray-50 dark:bg-gray-900 p-3">
-            <dt className="text-xs text-gray-500 dark:text-gray-400">
-              {label}
-            </dt>
-            <dd className="font-semibold">{value}</dd>
-          </div>
-        ))}
+        {values
+          .filter(
+            ([label]) =>
+              showPlanningSummary ||
+              [
+                'Sprint',
+                'Usuário',
+                'Total estimado',
+                'Total apontado nas issues',
+                'Saldo das issues',
+                'Issues sem estimativa',
+              ].includes(label)
+          )
+          .map(([label, value]) => (
+            <div
+              key={label}
+              className="rounded bg-gray-50 dark:bg-gray-900 p-3"
+            >
+              <dt className="text-xs text-gray-500 dark:text-gray-400">
+                {label}
+              </dt>
+              <dd className="font-semibold">{value}</dd>
+            </div>
+          ))}
       </dl>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <caption className="text-left py-2">
-            Issues atribuídas ao usuário na Sprint inteira
+            Tasks atribuídas ao usuário na Sprint inteira. O saldo considera a
+            estimativa menos as horas registradas por todos os usuários.
           </caption>
           <thead>
             <tr>

@@ -4,7 +4,7 @@
 | --- | --- |
 | npm install | Executado com npm; lockfile atualizado |
 | npm run lint | Passou: ESLint e TypeScript, incluindo frontend, Function e testes |
-| npm run test | 93 testes passaram; 1 teste real Jira foi pulado por falta de credenciais |
+| npm run test | 94 testes passaram; 1 teste real Jira foi pulado por falta de credenciais |
 | npm run test:functions | 9 verificações HTTP reais passaram em cada porta: Netlify 8888 e Vite 5173 |
 | npm run build | Passou com Vite 4.5.14 |
 | Bundle frontend | Não contém JIRA_API_TOKEN ou JIRA_EMAIL server-side |
@@ -19,6 +19,8 @@ O seletor Cloud/Data Center foi acrescentado ao Timesheet. Os testes Data Center
 O erro 404 informado em localhost:5173 veio da ausência do backend Jira no Vite. Foi adicionado um adaptador local que executa o mesmo handler da Function, com limite de corpo, proteção de origem e respostas sem cache. O servidor foi reiniciado e as duas portas responderam em JSON. Uma chamada de leitura via Vite ao Jira corporativo com PAT fictício recebeu 401 em JSON, confirmando o transporte até o servidor sem usar credenciais reais. A autenticação foi comparada com `equalizador-promax/src/equalizador_promax/jira_client.py`, que também usa token/PAT e `myself()`.
 
 A escolha de Sprint agora usa listas de boards Scrum e Sprints, sem pedir IDs. Testes Cloud/Data Center verificam endpoints Agile, autenticação, paginação completa, ordem de apresentação e recusa de Board ID inválido. O teste de interface cobre seleção de board/Sprint, limpeza ao trocar de board e preservação do período informado.
+
+Revisão UX/UI em 08/10/2026: atualização de boards junto à seleção; troca de usuário com seção e instrução próprias; período separado da consulta de tasks; geração atualiza as leituras para o período escolhido; revisão explica que não envia ao Jira; confirmação lista data, issue, horas e comentários, com edição recolhida. Botões principais/secundários, foco de teclado, ícones, dicas e feedback de carregamento foram aplicados. Os testes verificam o fluxo novo, preservação do período e atualização da lista de confirmação ao editar horas decimais. Não houve publicação nem envio de apontamentos reais.
 
 As chamadas autenticadas a um Jira e a criação real de worklogs não foram executadas: não foram fornecidas credenciais para execução dos testes. O README documenta o teste real opt-in de leitura para ambos os tipos e a validação de escrita em ambiente de teste com confirmação no produto.
 
